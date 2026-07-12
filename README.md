@@ -3,6 +3,8 @@
 Tugas UAS Flutter
 NIM: 23032033
 
+Text Adventure Game.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
