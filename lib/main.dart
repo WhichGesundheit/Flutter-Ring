@@ -97,7 +97,7 @@ class _GameControllerState extends State<GameController> {
     setState(() => _currentScreen = screenName);
   }
 
-  void MapsToZone(ZoneType targetZone) {
+  void mapsToZone(ZoneType targetZone) {
     setState(() {
       currentZone = targetZone;
       // Moving to a new zone takes 12 hours
@@ -291,7 +291,7 @@ class _GameControllerState extends State<GameController> {
           hoursPassed: hoursPassed,
           currentZone: currentZone,
           player: player!,
-          onZoneTravel: MapsToZone,
+          onZoneTravel: mapsToZone,
           onAction: (type, data, cost) {
             setState(() {
               hoursPassed += cost;
@@ -388,8 +388,9 @@ class _GameControllerState extends State<GameController> {
               inventory.clear();
               equippedSlots.clear();
               hoursPassed = 0;
+              currentZone = ZoneType.town;
+              _currentScreen = 'character_select';
             });
-            changeScreen('character_select');
           },
         );
       default:

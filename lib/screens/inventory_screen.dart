@@ -2,6 +2,41 @@ import 'package:flutter/material.dart';
 import '../models/character.dart';
 import '../models/item.dart';
 import '../widgets/game_image.dart';
+import '../widgets/stylish_popup.dart';
+
+Color rarityColor(Rarity r) {
+  switch (r) {
+    case Rarity.common:
+      return Colors.grey;
+    case Rarity.premium:
+      return Colors.tealAccent;
+    case Rarity.unique:
+      return Colors.deepPurpleAccent;
+    case Rarity.legendary:
+      return Colors.amberAccent;
+  }
+}
+
+Widget rarityBadge(Rarity r, {double fontSize = 8}) {
+  final color = rarityColor(r);
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(3),
+      border: Border.all(color: color.withValues(alpha: 0.5)),
+    ),
+    child: Text(
+      r.label.toUpperCase(),
+      style: TextStyle(
+        color: color,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.6,
+      ),
+    ),
+  );
+}
 
 class InventoryScreen extends StatefulWidget {
   final Character player;
@@ -42,16 +77,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
         _selectedInventoryIndex = null;
         _selectedEquippedIndex = null;
       });
-      ScaffoldMessenger.of(
+      showStylishPopup(
         context,
-      ).showSnackBar(SnackBar(content: Text("Equipped ${item.name}!")));
+        title: 'EQUIPPED',
+        message: '${item.name} equipped successfully.',
+        icon: Icons.check_circle,
+        iconColor: Colors.greenAccent,
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "No open ${item.type.name.toUpperCase()} slot available.",
-          ),
-        ),
+      showStylishPopup(
+        context,
+        title: 'SLOT UNAVAILABLE',
+        message: 'No open ${item.type.name.toUpperCase()} slot available.',
+        icon: Icons.warning_amber,
+        iconColor: Colors.orangeAccent,
       );
     }
   }
@@ -65,9 +104,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         _selectedInventoryIndex = null;
         _selectedEquippedIndex = null;
       });
-      ScaffoldMessenger.of(
+      showStylishPopup(
         context,
-      ).showSnackBar(SnackBar(content: Text("Unequipped ${item.name}!")));
+        title: 'UNEQUIPPED',
+        message: '${item.name} removed and returned to backpack.',
+        icon: Icons.remove_circle_outline,
+        iconColor: Colors.cyanAccent,
+      );
     }
   }
 
@@ -117,9 +160,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  item.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    rarityBadge(item.rarity, fontSize: 9),
+                  ],
                 ),
               ),
             ],
@@ -130,8 +180,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
             children: [
               Text(
                 "TYPE: ${item.type.name.toUpperCase()}",
-                style: const TextStyle(
-                  color: Colors.cyanAccent,
+                style: TextStyle(
+                  color: rarityColor(item.rarity),
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                   letterSpacing: 1,
@@ -193,12 +243,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     _selectedInventoryIndex = null;
                     _selectedEquippedIndex = null;
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "Consumed ${item.name}! Healed +${item.healAmount} HP.",
-                      ),
-                    ),
+                  showStylishPopup(
+                    context,
+                    title: 'CONSUMED',
+                    message:
+                        '${item.name} used! Healed +${item.healAmount} HP.',
+                    icon: Icons.local_hospital,
+                    iconColor: Colors.greenAccent,
                   );
                 },
                 icon: const Icon(Icons.local_hospital, size: 16),
@@ -327,7 +378,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: activeItem != null
-                            ? Colors.red[950]?.withOpacity(0.6)
+                            ? Colors.red[950]?.withValues(alpha: 0.6)
                             : Colors.grey[900],
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
@@ -364,16 +415,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                Text(
-                                  activeItem?.name ?? "[ Vacant ]",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: activeItem != null
-                                        ? Colors.white
-                                        : Colors.grey[600],
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        activeItem?.name ?? "[ Vacant ]",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: activeItem != null
+                                              ? Colors.white
+                                              : Colors.grey[600],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (activeItem != null) ...[
+                                      const SizedBox(width: 4),
+                                      rarityBadge(activeItem.rarity),
+                                    ],
+                                  ],
                                 ),
                               ],
                             ),
@@ -477,13 +538,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Text(
-                                    item.name,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.name,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      rarityBadge(item.rarity),
+                                    ],
                                   ),
                                 ],
                               ),

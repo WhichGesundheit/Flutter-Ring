@@ -68,10 +68,10 @@ class _LootScreenState extends State<LootScreen> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.amber.withOpacity(0.1),
+            color: Colors.amber.withValues(alpha: 0.1),
             boxShadow: [
               BoxShadow(
-                color: Colors.amber.withOpacity(0.2),
+                color: Colors.amber.withValues(alpha: 0.2),
                 blurRadius: 30,
                 spreadRadius: 10,
               ),
@@ -134,10 +134,10 @@ class _LootScreenState extends State<LootScreen> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withOpacity(0.2),
+                  color: Colors.green.withValues(alpha: 0.2),
                   blurRadius: 40,
                   spreadRadius: 15,
                 ),

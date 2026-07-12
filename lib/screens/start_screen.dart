@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/stylish_popup.dart';
 
 class StartScreen extends StatefulWidget {
   final VoidCallback onStart;
@@ -22,9 +23,13 @@ class _StartScreenState extends State<StartScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showStylishPopup(
         context,
-      ).showSnackBar(SnackBar(content: Text("Authentication Failed: $e")));
+        title: 'AUTH FAILED',
+        message: 'Authentication failed. Please try again.',
+        icon: Icons.error_outline,
+        iconColor: Colors.redAccent,
+      );
     } finally {
       if (mounted) {
         setState(() => _isAuthenticating = false);

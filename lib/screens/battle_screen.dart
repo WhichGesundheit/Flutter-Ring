@@ -4,6 +4,7 @@ import '../models/character.dart';
 import '../models/item.dart';
 import '../models/enemy.dart';
 import '../widgets/game_image.dart';
+import '../widgets/stylish_popup.dart';
 
 class BattleScreen extends StatefulWidget {
   final Character player;
@@ -141,54 +142,37 @@ class _BattleScreenState extends State<BattleScreen> {
   }
 
   void _processVictoryBonus() {
-    final random = Random();
     Item? droppedGear;
 
-    // 25% chance to roll an item from the specific enemy's drop table array
-    if (widget.enemy.potentialLoot.isNotEmpty && random.nextDouble() < 0.25) {
-      droppedGear = widget
-          .enemy
-          .potentialLoot[random.nextInt(widget.enemy.potentialLoot.length)];
+    // Rarity-based drop roll: each item in the loot table is independently
+    // checked against its rarity drop chance via Item.rollDrop().
+    if (widget.enemy.potentialLoot.isNotEmpty) {
+      droppedGear = Item.rollDrop(widget.enemy.potentialLoot);
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("💥 Threat Resolution Confirmed"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Area secure. Extracted +${widget.enemy.goldReward} Credits."),
-            if (droppedGear != null) ...[
-              const SizedBox(height: 15),
-              Text(
-                "🎁 EXTRA DROPPED SALVAGE FOUND:",
-                style: TextStyle(
-                  color: Colors.amber,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-              Text(
-                "${droppedGear.name} (${droppedGear.type.name.toUpperCase()})",
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              widget.player.credits += widget.enemy.goldReward;
-              widget.onEnd(true, droppedGear);
-            },
-            child: const Text("Confirm Extraction Summary"),
-          ),
-        ],
-      ),
+    // Build message lines
+    final StringBuffer msg = StringBuffer();
+    msg.write('Area secure. Extracted +${widget.enemy.goldReward} Credits.');
+    if (droppedGear != null) {
+      msg.write('\n\n🎁 EXTRA DROPPED SALVAGE:\n');
+      msg.write('${droppedGear.name} (${droppedGear.type.name.toUpperCase()})');
+    }
+    msg.write('\n\n📜 BATTLE LOG:');
+    for (final entry in logs) {
+      msg.write('\n$entry');
+    }
+
+    showStylishResultOverlay(
+      context,
+      title: 'THREAT RESOLVED',
+      message: msg.toString(),
+      buttonLabel: 'BACK TO BASE',
+      icon: Icons.emoji_events,
+      iconColor: Colors.amberAccent,
+      onPressed: () {
+        widget.player.credits += widget.enemy.goldReward;
+        widget.onEnd(true, droppedGear);
+      },
     );
   }
 
