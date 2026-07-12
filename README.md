@@ -1,6 +1,7 @@
 # flutter_game
 
-A new Flutter project.
+Tugas UAS Flutter
+NIM: 23032033
 
 ## Getting Started
 
