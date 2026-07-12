@@ -9,7 +9,7 @@ class BattleScreen extends StatefulWidget {
   final Character player;
   final List<Item?> equippedSlots;
   final Enemy enemy;
-  final Function(bool won) onEnd;
+  final Function(bool won, Item? drop) onEnd;
 
   const BattleScreen({
     super.key,
@@ -134,7 +134,7 @@ class _BattleScreenState extends State<BattleScreen> {
         if (widget.player.hp <= 0) {
           widget.player.hp = 0;
           isFighting = false;
-          widget.onEnd(false);
+          widget.onEnd(false, null);
         }
       });
     }
@@ -182,14 +182,8 @@ class _BattleScreenState extends State<BattleScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              widget.player.gold += widget.enemy.goldReward;
-
-              // If an item dropped, append it to the player's active global bag storage loop
-              if (droppedGear != null) {
-                // Pass it backward into your global machine controller array tracking
-                // You can add a return signature parameter adjustment to onEnd(true, droppedGear)
-              }
-              widget.onEnd(true);
+              widget.player.credits += widget.enemy.goldReward;
+              widget.onEnd(true, droppedGear);
             },
             child: const Text("Confirm Extraction Summary"),
           ),

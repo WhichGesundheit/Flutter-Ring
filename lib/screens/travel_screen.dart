@@ -1,185 +1,221 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/item.dart';
-import '../models/enemy_pool.dart'; // Ensure this is imported!
+import '../models/enemy_pool.dart';
+import '../models/zone.dart';
+import '../models/character.dart';
 
 class TravelScreen extends StatelessWidget {
   final int hoursPassed;
-  final Function(String type, dynamic data) onChoiceSelected;
+  final ZoneType currentZone;
+  final Character player;
+  final Function(ZoneType target) onZoneTravel;
+  final Function(String type, dynamic data, int cost) onAction;
   final VoidCallback onCancel;
 
   const TravelScreen({
     super.key,
     required this.hoursPassed,
-    required this.onChoiceSelected,
+    required this.currentZone,
+    required this.player,
+    required this.onZoneTravel,
+    required this.onAction,
     required this.onCancel,
   });
 
   @override
   Widget build(BuildContext context) {
+    final zoneData = Zone.worldMap[currentZone]!;
     final int days = hoursPassed ~/ 24;
     final int hours = hoursPassed % 24;
-    // Flag changes to true on Day 7 and onward (168 hours = 7 days)
-    final bool isBossTime =
-        (hoursPassed >= 144); // Start boss encounters on day 6
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Select Travel Path Vector")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(zoneData.name),
             Text(
-              isBossTime
-                  ? "⚠️ CRITICAL LEVEL CONVERGENCE: ANOMALOUS OVERSEER ENGAGED"
-                  : "Select path coordinates (Day $days, $hours:00 - Travel: 6h, Fight: 2h):",
-              style: TextStyle(
-                fontSize: 16,
-                fontStyle: FontStyle.italic,
-                color: isBossTime ? Colors.red : Colors.grey,
-              ),
-              textAlign: TextAlign.center,
+              "Day $days, $hours:00",
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
-            const SizedBox(height: 40),
-            if (isBossTime) ...[
-              Card(
-                color: Colors.red[950],
-                shape: RoundedRectangleBorder(
-                  side: const BorderSide(color: Colors.redAccent, width: 1.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.red,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        "APEX THREAT DETECTED",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        "The layout matrix loop concludes here. Escape vectors are sealed. Survive the wipe sequence.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 25),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.redAccent,
-                          side: const BorderSide(color: Colors.red),
-                          minimumSize: const Size.fromHeight(50),
-                        ),
-                        onPressed: () {
-                          // Dynamic Randomized Boss Selector Execution!
-                          final randomBoss = EnemyPool.getRandomBossEnemy();
-                          onChoiceSelected('Enemy', randomBoss);
-                        },
-                        child: const Text(
-                          "COMMENCE APEX COMBAT",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ] else ...[
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  backgroundColor: Colors.red[950],
-                ),
-                icon: const Icon(Icons.gavel, color: Colors.red),
-                label: const Text(
-                  "Threat Presence Detected",
-                  style: TextStyle(fontSize: 15),
-                ),
-                onPressed: () {
-                  final randomizedTarget = EnemyPool.getRandomStandardEnemy();
-                  onChoiceSelected('Enemy', randomizedTarget);
-                },
-              ),
-              const SizedBox(height: 15),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  backgroundColor: Colors.blueGrey[900],
-                ),
-                icon: const Icon(Icons.store, color: Colors.amber),
-                label: const Text(
-                  "Wandering Outpost Supply",
-                  style: TextStyle(fontSize: 15),
-                ),
-                onPressed: () {
-                  final random = Random();
-                  List<Item> pool = List.from(Item.shopLootPool);
-                  pool.shuffle(random);
-                  // Select 4-6 random items
-                  int itemCount = 4 + random.nextInt(3);
-                  List<Item> selection = pool.take(itemCount).toList();
-
-                  // Add one random special sale (50% off)
-                  int saleIdx = random.nextInt(selection.length);
-                  Item original = selection[saleIdx];
-                  selection[saleIdx] = Item(
-                    id: '${original.id}_sale',
-                    name: '${original.name} (SALE!)',
-                    type: original.type,
-                    description: original.description,
-                    cost: (original.cost * 0.5).toInt(),
-                    attackBonus: original.attackBonus,
-                    damageReduction: original.damageReduction,
-                    lifeSteal: original.lifeSteal,
-                    thorns: original.thorns,
-                    critChance: original.critChance,
-                    healAmount: original.healAmount,
-                    hpThreshold: original.hpThreshold,
-                  );
-
-                  onChoiceSelected('Shop', selection);
-                },
-              ),
-              const SizedBox(height: 15),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  backgroundColor: Colors.grey[850],
-                ),
-                icon: const Icon(Icons.help_outline, color: Colors.green),
-                label: const Text(
-                  "Debris Extraction Point",
-                  style: TextStyle(fontSize: 15),
-                ),
-                onPressed: () {
-                  final random = Random();
-                  final rolledItem = Item
-                      .chestLootPool[random.nextInt(Item.chestLootPool.length)];
-                  onChoiceSelected('Loot', rolledItem);
-                },
-              ),
-            ],
-            const Spacer(),
-            if (!isBossTime)
-              TextButton(
-                onPressed: onCancel,
-                child: const Text("Abstain & Maintain Perimeter"),
-              ),
           ],
         ),
       ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildZoneInfo(zoneData),
+            const SizedBox(height: 24),
+            const Text(
+              "REGION NAVIGATION",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const Divider(),
+            ...zoneData.connections.map((targetType) {
+              final targetZone = Zone.worldMap[targetType]!;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueGrey[900],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.map, size: 18),
+                  label: Text("Travel to ${targetZone.name} (12h)"),
+                  onPressed: () => onZoneTravel(targetType),
+                ),
+              );
+            }),
+            const SizedBox(height: 32),
+            const Text(
+              "LOCAL AREA EXPLORATION",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const Divider(),
+            _buildContextualActions(context),
+            const SizedBox(height: 40),
+            TextButton(
+              onPressed: onCancel,
+              child: const Text("Return to Main Terminal"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZoneInfo(Zone zone) {
+    return Card(
+      color: Colors.black45,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Text(
+              zone.description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontStyle: FontStyle.italic,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContextualActions(BuildContext context) {
+    if (currentZone == ZoneType.town) {
+      return Column(
+        children: [
+          _buildActionButton(
+            icon: Icons.shutter_speed,
+            label: "Blacksmith Supply Terminal",
+            color: Colors.orange[900]!,
+            onPressed: () {
+              final random = Random();
+              List<Item> pool = List.from(Item.shopLootPool);
+              pool.shuffle(random);
+              int itemCount = 4 + random.nextInt(3);
+              List<Item> selection = pool.take(itemCount).toList();
+              onAction('Shop', selection, 0);
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildActionButton(
+            icon: Icons.bed,
+            label: "Rest at Data-Inn (10 Credits)",
+            color: Colors.green[900]!,
+            onPressed: player.credits >= 10
+                ? () {
+                    player.credits -= 10;
+                    onAction('Heal', null, 0);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("System Restored. HP Full."),
+                      ),
+                    );
+                  }
+                : null,
+          ),
+          const SizedBox(height: 12),
+          _buildActionButton(
+            icon: Icons.chat_bubble_outline,
+            label: "Talk to Local NPC",
+            color: Colors.blue[900]!,
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    "'The binary brush is thicker than usual today...'",
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      );
+    } else {
+      // Forest or Deep Caves
+      return _buildActionButton(
+        icon: Icons.search,
+        label: "Scout Deeper into Brush",
+        color: Colors.red[900]!,
+        onPressed: () {
+          final random = Random();
+          final roll = random.nextDouble();
+          if (roll < 0.6) {
+            // 60% Battle
+            final enemy = EnemyPool.getRandomStandardEnemy();
+            onAction('Enemy', enemy, 4); // Scouting takes 4 hours
+          } else if (roll < 0.9) {
+            // 30% Loot
+            final loot =
+                Item.chestLootPool[random.nextInt(Item.chestLootPool.length)];
+            onAction('Loot', loot, 4);
+          } else {
+            // 10% Empty
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Area perimeter clear. No anomalies found."),
+              ),
+            );
+            onAction('Empty', null, 2);
+          }
+        },
+      );
+    }
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback? onPressed,
+  }) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        minimumSize: const Size.fromHeight(50),
+      ),
+      icon: Icon(icon),
+      label: Text(label),
+      onPressed: onPressed,
     );
   }
 }

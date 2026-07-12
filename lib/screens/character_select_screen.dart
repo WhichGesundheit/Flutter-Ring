@@ -14,7 +14,7 @@ class CharacterSelectScreen extends StatelessWidget {
       hp: 65,
       maxHp: 65,
       baseAttack: 7,
-      gold: 10,
+      credits: 10,
       startingItem: Item(
         id: 'iron_sword',
         name: 'Iron Sword',
@@ -36,7 +36,7 @@ class CharacterSelectScreen extends StatelessWidget {
       hp: 50,
       maxHp: 50,
       baseAttack: 5,
-      gold: 45,
+      credits: 45,
       startingItem: Item(
         id: 'focus_ring',
         name: 'Focus Ring',
@@ -104,7 +104,7 @@ class CharacterSelectScreen extends StatelessWidget {
                             "Inherent Force Modifier: ${char.baseAttack} ATK",
                           ),
                           const SizedBox(height: 4),
-                          Text("Starting Bankroll: ${char.gold} Gold"),
+                          Text("Starting Bankroll: ${char.credits} Credits"),
                           const SizedBox(height: 8),
                           const Divider(indent: 20, endIndent: 20),
                           const SizedBox(height: 8),

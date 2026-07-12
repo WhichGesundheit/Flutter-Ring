@@ -5,42 +5,6 @@ import 'item.dart';
 class EnemyPool {
   static final Random _random = Random();
 
-  // Defining standard item rewards database drops
-  static final List<Item> _commonDrops = [
-    Item(
-      id: 'scrap_shrapnel',
-      name: 'Scrap Metal',
-      type: SlotType.item,
-      description: 'Melted circuitry.',
-      attackBonus: 1,
-    ),
-    Item(
-      id: 'rusted_ring',
-      name: 'Rusted Ring',
-      type: SlotType.item,
-      description: 'Slight residual energy.',
-      critChance: 0.05,
-    ),
-  ];
-
-  static final List<Item> _rareDrops = [
-    Item(
-      id: 'titan_edge',
-      name: 'Titan Edge',
-      type: SlotType.weapon,
-      description: 'Heavy tactical blade.',
-      attackBonus: 7,
-    ),
-    Item(
-      id: 'vamp_dagger',
-      name: 'Vampiric Razor',
-      type: SlotType.weapon,
-      description: 'Siphons matrix code.',
-      attackBonus: 2,
-      lifeSteal: 3,
-    ),
-  ];
-
   // Monster
   static final List<Enemy> standardEnemies = [
     Enemy(
@@ -51,7 +15,7 @@ class EnemyPool {
       maxHp: 35,
       attack: 5,
       goldReward: 12,
-      potentialLoot: [_commonDrops[0]],
+      potentialLoot: [Item.chestLootPool[0], Item.chestLootPool[5]],
     ),
     Enemy(
       name: "Crystalline Ghoul",
@@ -61,7 +25,7 @@ class EnemyPool {
       maxHp: 45,
       attack: 8,
       goldReward: 20,
-      potentialLoot: [_commonDrops[1], _rareDrops[0]],
+      potentialLoot: [Item.chestLootPool[1], Item.chestLootPool[2]],
     ),
     Enemy(
       name: "Glitch Spectre",
@@ -71,7 +35,7 @@ class EnemyPool {
       maxHp: 40,
       attack: 10,
       goldReward: 25,
-      potentialLoot: [_rareDrops[1]],
+      potentialLoot: [Item.chestLootPool[4], Item.chestLootPool[7]],
     ),
   ];
   // Boss
@@ -84,7 +48,7 @@ class EnemyPool {
       maxHp: 140,
       attack: 16,
       goldReward: 100,
-      potentialLoot: [_rareDrops[0]],
+      potentialLoot: [Item.chestLootPool[6], Item.chestLootPool[14]],
     ),
     Enemy(
       name: "NEXUS WORLD-EATER",
@@ -94,7 +58,7 @@ class EnemyPool {
       maxHp: 160,
       attack: 14,
       goldReward: 120,
-      potentialLoot: [_rareDrops[1]],
+      potentialLoot: [Item.chestLootPool[12], Item.chestLootPool[13]],
     ),
     Enemy(
       name: "RING OMNI-BEAST",

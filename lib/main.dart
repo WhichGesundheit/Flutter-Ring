@@ -10,6 +10,7 @@ import 'dart:math';
 import 'models/item.dart';
 import 'models/character.dart';
 import 'models/enemy.dart';
+import 'models/zone.dart';
 
 // Import Screens
 import 'screens/start_screen.dart';
@@ -82,6 +83,7 @@ class _GameControllerState extends State<GameController> {
   Character? player;
   String? currentRunId;
   int hoursPassed = 0;
+  ZoneType currentZone = ZoneType.town;
 
   List<Item> inventory = [];
   List<Item?> equippedSlots = [];
@@ -93,6 +95,15 @@ class _GameControllerState extends State<GameController> {
 
   void changeScreen(String screenName) {
     setState(() => _currentScreen = screenName);
+  }
+
+  void MapsToZone(ZoneType targetZone) {
+    setState(() {
+      currentZone = targetZone;
+      // Moving to a new zone takes 12 hours
+      hoursPassed += 12;
+    });
+    syncPlayerStateToCloud();
   }
 
   void _initLocalRun(Character chosenChar) {
@@ -123,12 +134,13 @@ class _GameControllerState extends State<GameController> {
         'player_hp': chosenChar.hp,
         'player_max_hp': chosenChar.maxHp,
         'status': 'active',
+        'current_zone': currentZone.name,
       };
 
       dynamic runData;
       try {
         final testPayload = Map<String, dynamic>.from(payload)
-          ..['player_gold'] = chosenChar.gold;
+          ..['player_gold'] = chosenChar.credits;
         runData = await supabase
             .from('game_runs')
             .insert(testPayload)
@@ -139,7 +151,7 @@ class _GameControllerState extends State<GameController> {
         debugPrint("Failed with player_gold: $e. Trying with gold...");
         try {
           final testPayload = Map<String, dynamic>.from(payload)
-            ..['gold'] = chosenChar.gold;
+            ..['gold'] = chosenChar.credits;
           runData = await supabase
               .from('game_runs')
               .insert(testPayload)
@@ -193,16 +205,17 @@ class _GameControllerState extends State<GameController> {
         'player_hp': player!.hp,
         'current_day': hoursPassed ~/ 24,
         'status': (player!.hp <= 0 || hoursPassed >= 168) ? 'lost' : 'active',
+        'current_zone': currentZone.name,
       };
 
       if (_detectedGoldColumn == 'player_gold') {
-        payload['player_gold'] = player!.gold;
+        payload['player_gold'] = player!.credits;
       } else if (_detectedGoldColumn == 'gold') {
-        payload['gold'] = player!.gold;
+        payload['gold'] = player!.credits;
       } else if (_detectedGoldColumn == null) {
         try {
           final probePayload = Map<String, dynamic>.from(payload)
-            ..['player_gold'] = player!.gold;
+            ..['player_gold'] = player!.credits;
           await supabase
               .from('game_runs')
               .update(probePayload)
@@ -212,7 +225,7 @@ class _GameControllerState extends State<GameController> {
         } catch (_) {
           try {
             final probePayload = Map<String, dynamic>.from(payload)
-              ..['gold'] = player!.gold;
+              ..['gold'] = player!.credits;
             await supabase
                 .from('game_runs')
                 .update(probePayload)
@@ -276,9 +289,12 @@ class _GameControllerState extends State<GameController> {
       case 'travel':
         return TravelScreen(
           hoursPassed: hoursPassed,
-          onChoiceSelected: (type, data) {
+          currentZone: currentZone,
+          player: player!,
+          onZoneTravel: MapsToZone,
+          onAction: (type, data, cost) {
             setState(() {
-              hoursPassed += 6; // Traveling costs 6 hours
+              hoursPassed += cost;
               if (type == 'Enemy') {
                 activeEnemy = data;
                 changeScreen('battle');
@@ -288,6 +304,8 @@ class _GameControllerState extends State<GameController> {
               } else if (type == 'Loot') {
                 foundLoot = data;
                 changeScreen('loot');
+              } else if (type == 'Heal') {
+                player!.hp = player!.maxHp;
               }
 
               if (hoursPassed >= 168) {
@@ -303,10 +321,14 @@ class _GameControllerState extends State<GameController> {
           player: player!,
           equippedSlots: equippedSlots,
           enemy: activeEnemy!,
-          onEnd: (won) {
+          onEnd: (won, drop) {
             setState(() {
               hoursPassed += 2; // Fighting costs 2 hours
+              if (won && drop != null) {
+                inventory.add(drop);
+              }
             });
+            syncInventoryToCloud();
             syncPlayerStateToCloud();
             if (hoursPassed >= 168) {
               changeScreen('game_over');
@@ -349,7 +371,7 @@ class _GameControllerState extends State<GameController> {
           },
           onScrap: () {
             setState(() {
-              player!.gold += 15;
+              player!.credits += 15;
             });
             syncPlayerStateToCloud();
             changeScreen('main');

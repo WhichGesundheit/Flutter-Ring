@@ -27,7 +27,7 @@ class _ShopScreenState extends State<ShopScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          "Terminal Vendor Interface (Credits: ${widget.player.gold})",
+          "Terminal Vendor Interface (Credits: ${widget.player.credits})",
         ),
         automaticallyImplyLeading: false,
       ),
@@ -85,10 +85,10 @@ class _ShopScreenState extends State<ShopScreen> {
                     style: const TextStyle(color: Colors.teal, fontSize: 12),
                   ),
                   trailing: ElevatedButton(
-                    onPressed: widget.player.gold >= item.cost
+                    onPressed: widget.player.credits >= item.cost
                         ? () {
                             setState(() {
-                              widget.player.gold -= item.cost;
+                              widget.player.credits -= item.cost;
                               widget.inventory.add(item);
                             });
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -100,7 +100,7 @@ class _ShopScreenState extends State<ShopScreen> {
                             );
                           }
                         : null,
-                    child: Text("Buy (${item.cost}g)"),
+                    child: Text("Buy (${item.cost}c)"),
                   ),
                 );
               },

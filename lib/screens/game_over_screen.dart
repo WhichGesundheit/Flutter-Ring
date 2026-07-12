@@ -44,7 +44,7 @@ class GameOverScreen extends StatelessWidget {
                   style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 5),
-                Text("Accumulated Assets: ${player!.gold} Credits"),
+                Text("Accumulated Assets: ${player!.credits} Credits"),
                 const SizedBox(height: 5),
                 Text(
                   isVictory

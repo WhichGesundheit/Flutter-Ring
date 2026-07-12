@@ -261,7 +261,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      "Credits: ${widget.player.gold}g",
+                      "Credits: ${widget.player.credits}",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.amber,

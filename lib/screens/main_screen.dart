@@ -60,7 +60,7 @@ class MainScreen extends StatelessWidget {
                       ),
                       const Divider(height: 20),
                       Text(
-                        "HP: ${player.hp}/${player.maxHp}  |  Base Force: ${player.baseAttack} ATK  |  Gold: ${player.gold}",
+                        "HP: ${player.hp}/${player.maxHp}  |  Base Force: ${player.baseAttack} ATK  |  Credits: ${player.credits}",
                       ),
                     ],
                   ),

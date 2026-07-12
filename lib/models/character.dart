@@ -6,7 +6,7 @@ class Character {
   int hp;
   int maxHp;
   int baseAttack;
-  int gold;
+  int credits;
   final Item startingItem;
   final List<SlotType> slotLayout;
   final String? imagePath;
@@ -17,7 +17,7 @@ class Character {
     required this.hp,
     required this.maxHp,
     required this.baseAttack,
-    required this.gold,
+    required this.credits,
     required this.startingItem,
     required this.slotLayout,
     this.imagePath,
@@ -40,7 +40,7 @@ class Character {
       hp: maxHp,
       maxHp: maxHp,
       baseAttack: baseAttack,
-      gold: name == "Valerie" ? 10 : 45,
+      credits: name == "Valerie" ? 10 : 45,
       startingItem: startingItem,
       slotLayout: List.from(slotLayout),
       imagePath: imagePath,
