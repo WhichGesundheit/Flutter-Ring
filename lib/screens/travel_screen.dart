@@ -223,7 +223,7 @@ class _TravelScreenState extends State<TravelScreen> {
       final random = Random();
       final roll = random.nextDouble();
       if (roll < 0.6) {
-        final enemy = EnemyPool.getRandomStandardEnemy();
+        final enemy = EnemyPool.getEnemyForZone(widget.currentZone);
         widget.onAction('Enemy', enemy, 4);
       } else if (roll < 0.9) {
         final loot =

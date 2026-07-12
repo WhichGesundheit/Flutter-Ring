@@ -4,7 +4,7 @@ import '../models/character.dart';
 import '../models/item.dart';
 import '../models/enemy.dart';
 import '../widgets/game_image.dart';
-import '../widgets/stylish_popup.dart';
+import '../widgets/game_theme.dart';
 
 class BattleScreen extends StatefulWidget {
   final Character player;
@@ -26,6 +26,10 @@ class BattleScreen extends StatefulWidget {
 
 class _BattleScreenState extends State<BattleScreen> {
   bool isFighting = false;
+  bool isPaused = false;
+  bool _battleFinished = false;
+  bool _battleWon = false;
+  Item? _droppedGear;
   List<String> logs = [];
 
   int netAttack = 0;
@@ -33,6 +37,14 @@ class _BattleScreenState extends State<BattleScreen> {
   int netLifeSteal = 0;
   int netThorns = 0;
   double netCritChance = 0.0;
+
+  int _combatDelay = 700;
+  int _speedLevel = 0;
+
+  int _totalDamageDealt = 0;
+  int _totalDamageTaken = 0;
+  int _criticalHits = 0;
+  int _turns = 0;
 
   @override
   void initState() {
@@ -53,19 +65,38 @@ class _BattleScreenState extends State<BattleScreen> {
     }
   }
 
+  void _toggleSpeed() {
+    setState(() {
+      _speedLevel = (_speedLevel + 1) % 3;
+      _combatDelay = [700, 350, 150][_speedLevel];
+    });
+  }
+
+  void _togglePause() {
+    setState(() => isPaused = !isPaused);
+  }
+
   Future<void> triggerAsyncAutoBattleTicker() async {
     if (isFighting) return;
     setState(() => isFighting = true);
     final random = Random();
 
     while (widget.enemy.hp > 0 && widget.player.hp > 0) {
-      await Future.delayed(const Duration(milliseconds: 700));
+      while (isPaused && mounted) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      if (!mounted) return;
+      await Future.delayed(Duration(milliseconds: _combatDelay));
       if (!mounted) return;
 
       setState(() {
+        _turns++;
+
         bool isCritical = random.nextDouble() < netCritChance;
         int activeStrikePower = isCritical ? netAttack * 2 : netAttack;
         widget.enemy.hp -= activeStrikePower;
+        _totalDamageDealt += activeStrikePower;
+        if (isCritical) _criticalHits++;
 
         logs.add(
           isCritical
@@ -85,7 +116,7 @@ class _BattleScreenState extends State<BattleScreen> {
           widget.enemy.hp = 0;
           logs.add("✅ Combat targets neutralized.");
           isFighting = false;
-          _processVictoryBonus();
+          _onBattleEnd(true);
           return;
         }
 
@@ -94,174 +125,480 @@ class _BattleScreenState extends State<BattleScreen> {
           widget.enemy.attack,
         );
         widget.player.hp -= computedDamageToPlayer;
+        _totalDamageTaken += computedDamageToPlayer;
         logs.add(
-          "🛡️ Enemy attacks you for $computedDamageToPlayer (Blocked $netBlock).",
+          "🛡️ Enemy attacks for $computedDamageToPlayer (Blocked $netBlock).",
         );
 
         if (netThorns > 0) {
           widget.enemy.hp -= netThorns;
+          _totalDamageDealt += netThorns;
           logs.add("🌵 Thorns Matrix: Reflected $netThorns damage.");
         }
 
-        // --- Auto-use Consumables Logic ---
         for (int i = 0; i < widget.equippedSlots.length; i++) {
           final item = widget.equippedSlots[i];
           if (item != null && item.isConsumable) {
             double currentHpPercent = widget.player.hp / widget.player.maxHp;
-            // If hpThreshold is 0, it means it's always used if injured (or always used if healAmount > 0)
-            // But per task: "if the hp is 38/50 then the item is used but if the hp is 49/50 then the item is not used"
-            // So if hpThreshold is 0.0, we can assume it means "any injury" if it's meant to be automatic.
-            // Let's use a default threshold of 0.99 for items without a specific threshold if they are consumables.
             double threshold = item.hpThreshold > 0 ? item.hpThreshold : 0.99;
-
             if (currentHpPercent < threshold) {
               int actualHeal = item.healAmount;
               widget.player.hp = (widget.player.hp + actualHeal).clamp(
                 0,
                 widget.player.maxHp,
               );
-              logs.add(
-                "🧪 AUTO-USE: ${item.name} used! Restored $actualHeal HP.",
-              );
-              // Consume the item
+              logs.add("🧪 AUTO-USE: ${item.name} used! +$actualHeal HP.");
               widget.equippedSlots[i] = null;
-              // Re-compile stats as an item was removed (though it only affects heal logic here)
               _compileEquipmentStats();
-              break; // Use one item per turn to avoid spamming all potions
+              break;
             }
           }
         }
 
         if (widget.player.hp <= 0) {
           widget.player.hp = 0;
+          logs.add("❌ System failure. Shutting down.");
           isFighting = false;
-          widget.onEnd(false, null);
+          _onBattleEnd(false);
         }
       });
     }
   }
 
-  void _processVictoryBonus() {
-    Item? droppedGear;
-
-    // Rarity-based drop roll: each item in the loot table is independently
-    // checked against its rarity drop chance via Item.rollDrop().
-    if (widget.enemy.potentialLoot.isNotEmpty) {
-      droppedGear = Item.rollDrop(widget.enemy.potentialLoot);
+  void _onBattleEnd(bool won) {
+    Item? drop;
+    if (won && widget.enemy.potentialLoot.isNotEmpty) {
+      drop = Item.rollDrop(widget.enemy.potentialLoot);
     }
 
-    // Build message lines
-    final StringBuffer msg = StringBuffer();
-    msg.write('Area secure. Extracted +${widget.enemy.goldReward} Credits.');
-    if (droppedGear != null) {
-      msg.write('\n\n🎁 EXTRA DROPPED SALVAGE:\n');
-      msg.write('${droppedGear.name} (${droppedGear.type.name.toUpperCase()})');
-    }
-    msg.write('\n\n📜 BATTLE LOG:');
-    for (final entry in logs) {
-      msg.write('\n$entry');
-    }
-
-    showStylishResultOverlay(
-      context,
-      title: 'THREAT RESOLVED',
-      message: msg.toString(),
-      buttonLabel: 'BACK TO BASE',
-      icon: Icons.emoji_events,
-      iconColor: Colors.amberAccent,
-      onPressed: () {
+    setState(() {
+      _battleFinished = true;
+      _battleWon = won;
+      _droppedGear = drop;
+      if (won) {
         widget.player.credits += widget.enemy.goldReward;
-        widget.onEnd(true, droppedGear);
-      },
+      }
+    });
+
+    _showSummaryPopup(won, drop);
+  }
+
+  void _showSummaryPopup(bool won, Item? drop) {
+    final StringBuffer summary = StringBuffer();
+    summary.write(won ? 'Victory!' : 'Defeated.');
+    if (won) {
+      summary.write('\n+${widget.enemy.goldReward} Credits');
+    }
+    if (drop != null) {
+      summary.write('\n🎁 ${drop.name}');
+    }
+    summary.write('\n\n📊 Turns: $_turns  |  Dealt: $_totalDamageDealt');
+    summary.write('\n   Taken: $_totalDamageTaken  |  Crits: $_criticalHits');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GameColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: won
+                ? GameColors.success.withValues(alpha: 0.5)
+                : GameColors.danger.withValues(alpha: 0.5),
+          ),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              won ? Icons.emoji_events : Icons.error_outline,
+              color: won ? GameColors.success : GameColors.danger,
+              size: 28,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                won ? 'THREAT RESOLVED' : 'SYSTEM FAILURE',
+                style: TextStyle(
+                  color: won ? GameColors.success : GameColors.danger,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          summary.toString(),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: won ? GameColors.success : GameColors.danger,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text(
+                "CONTINUE",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _exitBattle() {
+    if (_battleWon) {
+      widget.onEnd(true, _droppedGear);
+    } else {
+      widget.onEnd(false, null);
+    }
+  }
+
+  String get _speedLabel => ['1×', '2×', '4×'][_speedLevel];
+  IconData get _speedIcon =>
+      [Icons.play_arrow, Icons.fast_forward, Icons.bolt][_speedLevel];
+
+  Widget _buildBottomButton() {
+    if (_battleFinished) {
+      return SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _battleWon
+                ? GameColors.success
+                : GameColors.danger,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 4,
+          ),
+          onPressed: _exitBattle,
+          icon: Icon(_battleWon ? Icons.check_circle : Icons.arrow_back),
+          label: Text(
+            _battleWon ? "EXTRACT LOOT" : "RETREAT",
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      );
+    }
+    if (!isFighting) {
+      return SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: GameColors.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 4,
+          ),
+          onPressed: triggerAsyncAutoBattleTicker,
+          child: const Text(
+            "INITIALIZE COMBAT",
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            color: GameColors.primary,
+            strokeWidth: 2.5,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          isPaused ? "PAUSED" : "COMBAT IN PROGRESS...",
+          style: TextStyle(
+            color: isPaused ? GameColors.warning : GameColors.primary,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _miniStat(IconData icon, String value, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 12),
+        const SizedBox(width: 3),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.6),
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: GameColors.background,
       appBar: AppBar(
-        title: Text("ENGAGED SIMULATION: vs ${widget.enemy.name}"),
+        title: Text(
+          _battleFinished
+              ? (_battleWon ? "Victory" : "Defeated")
+              : "vs ${widget.enemy.name}",
+        ),
+        backgroundColor: GameColors.surface,
+        leading: _battleFinished
+            ? IconButton(
+                onPressed: _exitBattle,
+                icon: const Icon(Icons.arrow_back_ios_new),
+                tooltip: 'Back to Base',
+              )
+            : null,
+        actions: [
+          if (!_battleFinished)
+            IconButton(
+              onPressed: isFighting ? _toggleSpeed : null,
+              icon: Icon(_speedIcon, color: GameColors.accent),
+              tooltip: 'Speed: $_speedLabel',
+            ),
+          if (isFighting && !_battleFinished)
+            IconButton(
+              onPressed: _togglePause,
+              icon: Icon(
+                isPaused ? Icons.play_arrow : Icons.pause,
+                color: isPaused ? GameColors.success : GameColors.warning,
+              ),
+              tooltip: isPaused ? 'Resume' : 'Pause',
+            ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SafeArea(
         child: Column(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Column(
-                  children: [
-                    GameImage(
-                      imagePath: widget.player.imagePath,
-                      fallbackIcon: Icons.person,
-                      size: 60,
+            // ── COMBATANT DISPLAY ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GameImage(
+                          imagePath: widget.player.imagePath,
+                          fallbackIcon: Icons.person,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.player.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        HpBar(
+                          current: widget.player.hp,
+                          max: widget.player.maxHp,
+                          height: 8,
+                          showNumbers: true,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.player.name,
-                      style: const TextStyle(
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: GameColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: GameColors.primary.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Text(
+                      "VS",
+                      style: TextStyle(
                         fontSize: 18,
+                        color: GameColors.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text("HP: ${widget.player.hp}/${widget.player.maxHp}"),
-                  ],
-                ),
-                const Text(
-                  "VS",
-                  style: TextStyle(
-                    fontSize: 24,
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GameImage(
+                          imagePath: widget.enemy.imagePath,
+                          fallbackIcon: Icons.adb,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.enemy.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        HpBar(
+                          current: widget.enemy.hp,
+                          max: widget.enemy.maxHp,
+                          height: 8,
+                          showNumbers: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // ── STAT SUMMARY ──
+            if (isFighting || _battleFinished)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: GameColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _miniStat(
+                        Icons.flash_on,
+                        '$netAttack',
+                        'ATK',
+                        GameColors.primary,
+                      ),
+                      _miniStat(
+                        Icons.shield,
+                        '$netBlock',
+                        'DEF',
+                        GameColors.accent,
+                      ),
+                      _miniStat(
+                        Icons.bolt,
+                        '${(netCritChance * 100).toInt()}%',
+                        'CRIT',
+                        GameColors.gold,
+                      ),
+                      if (_battleFinished)
+                        _miniStat(
+                          Icons.compare_arrows,
+                          '$_turns',
+                          'TURNS',
+                          Colors.white70,
+                        ),
+                    ],
                   ),
                 ),
-                Column(
-                  children: [
-                    GameImage(
-                      imagePath: widget.enemy.imagePath,
-                      fallbackIcon: Icons.adb,
-                      size: 60,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.enemy.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text("HP: ${widget.enemy.hp}"),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
+              ),
+            const SizedBox(height: 8),
+
+            // ── BATTLE LOG ──
             Expanded(
-              child: ListView.builder(
-                itemCount: logs.length,
-                itemBuilder: (context, i) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: Text(
-                    logs[i],
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontFamily: 'monospace',
-                      fontSize: 13,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: GameColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: GameColors.border),
+                  ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(4),
+                    itemCount: logs.length,
+                    itemBuilder: (context, i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2.0),
+                      child: Text(
+                        logs[i],
+                        style: TextStyle(
+                          color: logs[i].contains('💥')
+                              ? GameColors.gold
+                              : logs[i].contains('✅')
+                              ? GameColors.success
+                              : logs[i].contains('🧪')
+                              ? GameColors.accent
+                              : logs[i].contains('❌')
+                              ? GameColors.danger
+                              : Colors.grey,
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-            if (widget.enemy.hp > 0 && !isFighting)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[900],
-                  minimumSize: const Size.fromHeight(55),
-                ),
-                onPressed: triggerAsyncAutoBattleTicker,
-                child: const Text("INITIALIZE AUTOMATED COMBAT LOOP"),
-              ),
-            if (isFighting) const CircularProgressIndicator(color: Colors.red),
+
+            // ── BOTTOM BUTTON ──
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: _buildBottomButton(),
+            ),
           ],
         ),
       ),

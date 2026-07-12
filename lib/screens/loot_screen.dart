@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/item.dart';
+import 'inventory_screen.dart';
 
 class LootScreen extends StatefulWidget {
   final Item loot;
@@ -172,6 +173,8 @@ class _LootScreenState extends State<LootScreen> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 6),
+        rarityBadge(widget.loot.rarity, fontSize: 12),
+        const SizedBox(height: 4),
         Text(
           "SIGNATURE: ${widget.loot.type.name.toUpperCase()}",
           style: const TextStyle(
@@ -241,9 +244,9 @@ class _LootScreenState extends State<LootScreen> {
             ),
           ),
           icon: const Icon(Icons.delete_sweep),
-          label: const Text(
-            "SCRAP FOR PARTS (+15 Credits)",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          label: Text(
+            "SCRAP FOR PARTS (+${widget.loot.sellValue} Credits)",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           onPressed: widget.onScrap,
         ),

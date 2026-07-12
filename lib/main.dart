@@ -64,7 +64,7 @@ class FlutterRingGame extends StatelessWidget {
       title: 'Flutter Ring',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF121212),
-        primaryColor: Colors.red[955],
+        primaryColor: Colors.red[900],
       ),
       home: const GameController(),
     );
@@ -371,7 +371,7 @@ class _GameControllerState extends State<GameController> {
           },
           onScrap: () {
             setState(() {
-              player!.credits += 15;
+              player!.credits += foundLoot!.sellValue;
             });
             syncPlayerStateToCloud();
             changeScreen('main');
@@ -385,8 +385,8 @@ class _GameControllerState extends State<GameController> {
             setState(() {
               player = null;
               currentRunId = null;
-              inventory.clear();
-              equippedSlots.clear();
+              inventory = [];
+              equippedSlots = [];
               hoursPassed = 0;
               currentZone = ZoneType.town;
               _currentScreen = 'character_select';

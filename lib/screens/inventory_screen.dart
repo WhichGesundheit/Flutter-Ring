@@ -271,7 +271,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             if (isEquipped && index != null)
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[850],
+                  backgroundColor: Colors.red[800],
                   foregroundColor: Colors.white,
                 ),
                 onPressed: () {
@@ -305,24 +305,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "HP: ${widget.player.hp}/${widget.player.maxHp}",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      "Credits: ${widget.player.credits}",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.amber,
+                    Expanded(
+                      child: Text(
+                        "HP: ${widget.player.hp}/${widget.player.maxHp}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                    Text(
-                      "Total ATK: ${widget.player.getEffectiveAttack(widget.equippedSlots)}",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.redAccent,
+                    Expanded(
+                      child: Text(
+                        "Credits: ${widget.player.credits}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        "ATK: ${widget.player.getEffectiveAttack(widget.equippedSlots)}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.redAccent,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.end,
                       ),
                     ),
                   ],
