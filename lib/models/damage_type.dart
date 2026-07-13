@@ -5,6 +5,21 @@ import 'package:flutter/material.dart';
 /// ═══════════════════════════════════════════════════════════════════════════════
 enum DamageType { physical, fire, ice, lightning, poison, void_, holy, dark }
 
+/// Unique status effect that can be applied by damage types
+class DamageTypeEffect {
+  final DamageType source;
+  final String name;
+  final String icon;
+  int turnsRemaining;
+
+  DamageTypeEffect({
+    required this.source,
+    required this.name,
+    required this.icon,
+    required this.turnsRemaining,
+  });
+}
+
 extension DamageTypeExtension on DamageType {
   String get label {
     switch (this) {
@@ -45,6 +60,28 @@ extension DamageTypeExtension on DamageType {
         return '✨';
       case DamageType.dark:
         return '🌑';
+    }
+  }
+
+  /// Description of the unique combat effect this damage type inflicts
+  String get effectDescription {
+    switch (this) {
+      case DamageType.physical:
+        return 'Sunder: 30% chance to weaken enemy ATK by 20% for 2 turns';
+      case DamageType.fire:
+        return 'Ignite: 30% chance to burn for bonus/2 damage/turn (3 turns)';
+      case DamageType.ice:
+        return 'Deep Freeze: 20% chance to freeze enemy for 1 turn';
+      case DamageType.lightning:
+        return 'Chain Strike: 25% chance to deal lightning bonus again';
+      case DamageType.poison:
+        return 'Venom: 35% chance to poison for bonus×0.4 damage/turn (3 turns)';
+      case DamageType.void_:
+        return 'Rift: 20% chance to deal 2× void bonus damage this hit';
+      case DamageType.holy:
+        return 'Judgment: +50% bonus dmg vs enemies >50% HP, heals bonus×0.25';
+      case DamageType.dark:
+        return 'Leech: Heals bonus×0.35 HP per hit, 15% Weakness chance';
     }
   }
 

@@ -57,6 +57,15 @@ class _BattleScreenState extends State<BattleScreen> {
   DamageType _currentBossAttackType = DamageType.physical;
   int _frozenTurns = 0;
 
+  // Player damage type effects (inflicted on enemy)
+  int _enemyBurnTurns = 0;
+  int _enemyBurnDamage = 0;
+  int _enemyVenomTurns = 0;
+  int _enemyVenomDamage = 0;
+  int _enemyFrozenTurns = 0; // Ice: enemy misses attack
+  int _enemySlowTurns = 0; // Physical: enemy ATK reduced
+  int _enemyWeaknessTurns = 0; // Dark: enemy takes +20% damage
+
   @override
   void initState() {
     super.initState();
@@ -141,6 +150,164 @@ class _BattleScreenState extends State<BattleScreen> {
 
   void _togglePause() {
     setState(() => isPaused = !isPaused);
+  }
+
+  /// Process damage-over-time effects on the enemy (burn, venom)
+  void _processEnemyStatusEffects() {
+    // Burn tick (Fire)
+    if (_enemyBurnTurns > 0) {
+      widget.enemy.hp -= _enemyBurnDamage;
+      _totalDamageDealt += _enemyBurnDamage;
+      logs.add(
+        "🔥 Scorched! Enemy takes $_enemyBurnDamage burn damage (${_enemyBurnTurns - 1} turns left)",
+      );
+      _enemyBurnTurns--;
+    }
+
+    // Venom tick (Poison)
+    if (_enemyVenomTurns > 0) {
+      widget.enemy.hp -= _enemyVenomDamage;
+      _totalDamageDealt += _enemyVenomDamage;
+      logs.add(
+        "☠️ Venom tick! Enemy takes $_enemyVenomDamage toxin damage (${_enemyVenomTurns - 1} turns left)",
+      );
+      _enemyVenomTurns--;
+    }
+  }
+
+  /// Roll for damage type effects after player attacks
+  void _rollDamageTypeEffects(int damageDealt, Random random) {
+    final activeBonus = netBonusDamage.entries
+        .where((e) => !widget.enemy.immunities.contains(e.key))
+        .toList();
+
+    for (final entry in activeBonus) {
+      final type = entry.key;
+      final bonus = entry.value;
+      if (bonus <= 0) continue;
+
+      switch (type) {
+        // ── PHYSICAL: Sunder – 30% chance to weaken enemy ATK by 20% for 2 turns ──
+        case DamageType.physical:
+          if (random.nextDouble() < 0.30) {
+            _enemySlowTurns = 2;
+            logs.add(
+              "⚔️ SUnder! Enemy armor cracked — ATK weakened for 2 turns!",
+            );
+          }
+          break;
+
+        // ── FIRE: Ignite – 30% chance to burn for bonus/2 per turn for 3 turns ──
+        case DamageType.fire:
+          if (random.nextDouble() < 0.30) {
+            final burnDmg = (bonus * 0.5).ceil();
+            // Refresh duration, keep highest damage
+            _enemyBurnTurns = 3;
+            if (burnDmg > _enemyBurnDamage) _enemyBurnDamage = burnDmg;
+            logs.add("🔥 IGNITED! Enemy burning for $burnDmg/turn (3 turns)!");
+          }
+          break;
+
+        // ── ICE: Deep Freeze – 20% chance to freeze enemy for 1 turn ──
+        case DamageType.ice:
+          if (random.nextDouble() < 0.20 && _enemyFrozenTurns <= 0) {
+            _enemyFrozenTurns = 1;
+            logs.add(
+              "❄️ DEEP FREEZE! Enemy crystallized — will miss next attack!",
+            );
+          }
+          break;
+
+        // ── LIGHTNING: Chain Strike – 25% chance to deal bonus again ──
+        case DamageType.lightning:
+          if (random.nextDouble() < 0.25) {
+            int chainDmg = bonus;
+            if (widget.enemy.resistance[type] != null) {
+              chainDmg = (bonus * (1.0 - widget.enemy.resistance[type]!))
+                  .round();
+            }
+            widget.enemy.hp -= chainDmg;
+            _totalDamageDealt += chainDmg;
+            logs.add(
+              "⚡ CHAIN STRIKE! Arc deals $chainDmg bonus lightning damage!",
+            );
+          }
+          break;
+
+        // ── POISON: Venom – 35% chance to apply DoT for 3 turns ──
+        case DamageType.poison:
+          if (random.nextDouble() < 0.35) {
+            final venomDmg = (bonus * 0.4).ceil();
+            _enemyVenomTurns = 3;
+            if (venomDmg > _enemyVenomDamage) _enemyVenomDamage = venomDmg;
+            logs.add(
+              "☠️ TOXIC BITE! Enemy injected with venom — $venomDmg/turn (3 turns)!",
+            );
+          }
+          break;
+
+        // ── VOID: Rift – 20% chance to deal 2× bonus this hit ──
+        case DamageType.void_:
+          if (random.nextDouble() < 0.20) {
+            int riftDmg = bonus;
+            if (widget.enemy.resistance[type] != null) {
+              riftDmg = (bonus * (1.0 - widget.enemy.resistance[type]!))
+                  .round();
+            }
+            widget.enemy.hp -= riftDmg;
+            _totalDamageDealt += riftDmg;
+            logs.add(
+              "🌀 RIFT TORN! Reality shatters — +$riftDmg void burst damage!",
+            );
+          }
+          break;
+
+        // ── HOLY: Judgment – +50% bonus vs enemies >50% HP, heals bonus×0.25 ──
+        case DamageType.holy:
+          if (widget.enemy.hp > widget.enemy.maxHp * 0.5) {
+            int smiteDmg = (bonus * 0.5).round();
+            if (widget.enemy.resistance[type] != null) {
+              smiteDmg = (smiteDmg * (1.0 - widget.enemy.resistance[type]!))
+                  .round();
+            }
+            widget.enemy.hp -= smiteDmg;
+            _totalDamageDealt += smiteDmg;
+            logs.add(
+              "✨ JUDGMENT! Holy smite deals +$smiteDmg to the unworthy!",
+            );
+          }
+          final healAmount = (bonus * 0.25).ceil();
+          if (healAmount > 0) {
+            widget.player.hp = (widget.player.hp + healAmount).clamp(
+              0,
+              widget.player.maxHp,
+            );
+            logs.add("✨ Radiance heals you for +$healAmount HP");
+          }
+          break;
+
+        // ── DARK: Leech – heals 35% of bonus, 15% chance Weakness ──
+        case DamageType.dark:
+          final healAmount = (bonus * 0.35).ceil();
+          if (healAmount > 0) {
+            widget.player.hp = (widget.player.hp + healAmount).clamp(
+              0,
+              widget.player.maxHp,
+            );
+            logs.add("🌑 DARK SIPHON! Drained +$healAmount HP from the enemy!");
+          }
+          if (random.nextDouble() < 0.15 && _enemyWeaknessTurns <= 0) {
+            _enemyWeaknessTurns = 2;
+            logs.add(
+              "🌑 WEAKNESS applied! Enemy deals 20% less damage for 2 turns!",
+            );
+          }
+          break;
+
+        default:
+          break;
+      }
+    }
   }
 
   /// Calculate damage dealt to enemy, factoring in damage types and resistances
@@ -235,7 +402,10 @@ class _BattleScreenState extends State<BattleScreen> {
         // ── BOSS MECHANIC: Apply pre-attack effects ──
         _applyBossMechanicOnPlayerTurn();
 
-        // ── FREEZE CHECK ──
+        // ── ENEMY STATUS EFFECTS: Burn/Venom DoT ──
+        _processEnemyStatusEffects();
+
+        // ── FREEZE CHECK (Boss mechanic on player) ──
         if (widget.enemy.mechanic == BossMechanic.freeze &&
             _turns % widget.enemy.mechanicValue == 0) {
           _frozenTurns = 1;
@@ -302,6 +472,11 @@ class _BattleScreenState extends State<BattleScreen> {
               logs.add("🪞 Reflection: -$reflected HP back to you!");
             }
           }
+
+          // ── DAMAGE TYPE EFFECTS: Roll for unique per-type procs ──
+          if (widget.enemy.hp > 0) {
+            _rollDamageTypeEffects(activeStrikePower, random);
+          }
         }
 
         if (widget.enemy.hp <= 0) {
@@ -313,14 +488,39 @@ class _BattleScreenState extends State<BattleScreen> {
         }
 
         // ── ENEMY ATTACK ──
-        int computedDamageToPlayer = _calculateDamageToPlayer(
-          widget.enemy.attack,
-        );
-        widget.player.hp -= computedDamageToPlayer;
-        _totalDamageTaken += computedDamageToPlayer;
-        logs.add(
-          "🛡️ ${_currentBossAttackType.icon} Enemy attacks for $computedDamageToPlayer (${_currentBossAttackType.label}).",
-        );
+        if (_enemyFrozenTurns > 0) {
+          logs.add(
+            "❄️ Enemy is FROZEN and cannot attack! (${_enemyFrozenTurns - 1} turns left)",
+          );
+          _enemyFrozenTurns--;
+        } else {
+          int rawEnemyAttack = widget.enemy.attack;
+
+          // Apply Physical Sunder slow
+          if (_enemySlowTurns > 0) {
+            rawEnemyAttack = (rawEnemyAttack * 0.8).round();
+            logs.add(
+              "⚔️ Sunder active — enemy ATK reduced (${_enemySlowTurns - 1} turns left)",
+            );
+            _enemySlowTurns--;
+          }
+
+          // Apply Dark Weakness
+          if (_enemyWeaknessTurns > 0) {
+            rawEnemyAttack = (rawEnemyAttack * 0.8).round();
+            logs.add(
+              "🌑 Weakness active — enemy deals 20% less (${_enemyWeaknessTurns - 1} turns left)",
+            );
+            _enemyWeaknessTurns--;
+          }
+
+          int computedDamageToPlayer = _calculateDamageToPlayer(rawEnemyAttack);
+          widget.player.hp -= computedDamageToPlayer;
+          _totalDamageTaken += computedDamageToPlayer;
+          logs.add(
+            "🛡️ ${_currentBossAttackType.icon} Enemy attacks for $computedDamageToPlayer (${_currentBossAttackType.label}).",
+          );
+        }
 
         // Boss mechanic: Burn
         if (widget.enemy.mechanic == BossMechanic.burn) {
@@ -645,12 +845,15 @@ class _BattleScreenState extends State<BattleScreen> {
             ...netBonusDamage.entries.map(
               (e) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: Text(
-                  "${e.key.icon}${e.value}",
-                  style: TextStyle(
-                    color: e.key.color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                child: Tooltip(
+                  message: '${e.key.label}: ${e.key.effectDescription}',
+                  child: Text(
+                    "${e.key.icon}${e.value}",
+                    style: TextStyle(
+                      color: e.key.color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

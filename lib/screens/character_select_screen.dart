@@ -12,6 +12,7 @@ class CharacterSelectScreen extends StatelessWidget {
     Character(
       name: "Valerie",
       className: "Dual-Wield Vanguard",
+      imagePath: "assets/images/characters/valerie.png",
       hp: 65,
       maxHp: 65,
       baseAttack: 7,
@@ -34,6 +35,7 @@ class CharacterSelectScreen extends StatelessWidget {
     Character(
       name: "Aethelgard",
       className: "Grand Scholar Spellsword",
+      imagePath: "assets/images/characters/aethelgard.png",
       hp: 50,
       maxHp: 50,
       baseAttack: 5,
@@ -57,6 +59,7 @@ class CharacterSelectScreen extends StatelessWidget {
     Character(
       name: "Vex",
       className: "Voidblade Assassin",
+      imagePath: "assets/images/characters/vex.png",
       hp: 40,
       maxHp: 40,
       baseAttack: 9,
@@ -80,6 +83,7 @@ class CharacterSelectScreen extends StatelessWidget {
     Character(
       name: "Bulwark",
       className: "Ironclad Sentinel",
+      imagePath: "assets/images/characters/bulwark.png",
       hp: 85,
       maxHp: 85,
       baseAttack: 4,

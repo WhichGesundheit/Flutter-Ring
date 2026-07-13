@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/character.dart';
+import '../widgets/game_image.dart';
 import '../widgets/game_theme.dart';
 
 class MainScreen extends StatelessWidget {
@@ -122,6 +123,17 @@ class MainScreen extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
+                    // Character portrait
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.4,
+                      child: GameImage(
+                        imagePath: player.imagePath,
+                        fallbackIcon: Icons.person,
+                        size: MediaQuery.of(context).size.height * 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
                     // Character name and class
                     Text(
                       player.name,
