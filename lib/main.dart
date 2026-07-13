@@ -10,6 +10,8 @@ import 'dart:math';
 import 'models/item.dart';
 import 'models/character.dart';
 import 'models/enemy.dart';
+import 'models/boss.dart';
+import 'models/merchant.dart';
 import 'models/zone.dart';
 
 // Import Screens
@@ -92,17 +94,22 @@ class _GameControllerState extends State<GameController> {
   List<Item> shopItems = [];
   Item? foundLoot;
   String? _detectedGoldColumn;
+  BossEncounterTracker bossTracker = BossEncounterTracker();
+  MerchantManager merchantManager = MerchantManager();
 
   void changeScreen(String screenName) {
     setState(() => _currentScreen = screenName);
   }
 
   void mapsToZone(ZoneType targetZone) {
+    final oldDay = hoursPassed ~/ 24;
     setState(() {
       currentZone = targetZone;
-      // Moving to a new zone takes 12 hours
       hoursPassed += 12;
     });
+    if ((hoursPassed ~/ 24) > oldDay) {
+      merchantManager.rotateLocations();
+    }
     syncPlayerStateToCloud();
   }
 
@@ -116,6 +123,8 @@ class _GameControllerState extends State<GameController> {
       currentRunId = 'local_run_${DateTime.now().millisecondsSinceEpoch}';
       equippedSlots = List.filled(chosenChar.slotLayout.length, null);
       equippedSlots[startingSlotIdx] = chosenChar.startingItem;
+      bossTracker = BossEncounterTracker();
+      merchantManager = MerchantManager();
       changeScreen('main');
     });
   }
@@ -291,6 +300,8 @@ class _GameControllerState extends State<GameController> {
           hoursPassed: hoursPassed,
           currentZone: currentZone,
           player: player!,
+          bossTracker: bossTracker,
+          merchantManager: merchantManager,
           onZoneTravel: mapsToZone,
           onAction: (type, data, cost) {
             setState(() {
@@ -324,8 +335,15 @@ class _GameControllerState extends State<GameController> {
           onEnd: (won, drop) {
             setState(() {
               hoursPassed += 2; // Fighting costs 2 hours
-              if (won && drop != null) {
-                inventory.add(drop);
+              if (won) {
+                // Track weekly boss defeat
+                if (activeEnemy!.isBoss) {
+                  final currentDay = hoursPassed ~/ 24;
+                  bossTracker.markDefeated(currentDay);
+                }
+                if (drop != null) {
+                  inventory.add(drop);
+                }
               }
             });
             syncInventoryToCloud();
@@ -389,6 +407,8 @@ class _GameControllerState extends State<GameController> {
               equippedSlots = [];
               hoursPassed = 0;
               currentZone = ZoneType.town;
+              bossTracker = BossEncounterTracker();
+              merchantManager = MerchantManager();
               _currentScreen = 'character_select';
             });
           },

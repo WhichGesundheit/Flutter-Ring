@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'damage_type.dart';
 import 'enemy.dart';
 import 'item.dart';
 import 'zone.dart';
@@ -33,6 +34,7 @@ class EnemyPool {
         _pick(Rarity.common),
         _pick(Rarity.premium),
       ],
+      attackType: DamageType.physical,
     ),
     Enemy(
       name: "Crystalline Ghoul",
@@ -47,6 +49,7 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.premium),
       ],
+      attackType: DamageType.ice,
     ),
     Enemy(
       name: "Glitch Spectre",
@@ -61,6 +64,8 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.void_,
+      immunities: [DamageType.physical],
     ),
     Enemy(
       name: "Rust Crawler",
@@ -71,6 +76,7 @@ class EnemyPool {
       attack: 4,
       goldReward: 8,
       potentialLoot: [_pick(Rarity.common), _pick(Rarity.common)],
+      attackType: DamageType.physical,
     ),
     Enemy(
       name: "Data Phantom",
@@ -85,6 +91,8 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.dark,
+      resistance: {DamageType.physical: 0.3},
     ),
     Enemy(
       name: "Iron Swarm",
@@ -95,6 +103,7 @@ class EnemyPool {
       attack: 7,
       goldReward: 16,
       potentialLoot: [_pick(Rarity.common), _pick(Rarity.premium)],
+      attackType: DamageType.lightning,
     ),
   ];
 
@@ -117,6 +126,7 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.premium),
       ],
+      attackType: DamageType.poison,
     ),
     Enemy(
       name: "Fungal Malware",
@@ -127,6 +137,8 @@ class EnemyPool {
       attack: 6,
       goldReward: 14,
       potentialLoot: [_pick(Rarity.common), _pick(Rarity.premium)],
+      attackType: DamageType.poison,
+      resistance: {DamageType.poison: 0.5},
     ),
     Enemy(
       name: "Canopy Watcher",
@@ -141,6 +153,7 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.lightning,
     ),
   ];
 
@@ -159,6 +172,8 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.physical,
+      resistance: {DamageType.physical: 0.2},
     ),
     Enemy(
       name: "Memory Worm",
@@ -169,6 +184,7 @@ class EnemyPool {
       attack: 8,
       goldReward: 20,
       potentialLoot: [_pick(Rarity.premium), _pick(Rarity.unique)],
+      attackType: DamageType.void_,
     ),
     Enemy(
       name: "Corrupted Archive",
@@ -183,6 +199,8 @@ class EnemyPool {
         _pick(Rarity.unique),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.dark,
+      immunities: [DamageType.dark],
     ),
   ];
 
@@ -201,6 +219,8 @@ class EnemyPool {
         _pick(Rarity.premium),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.lightning,
+      resistance: {DamageType.lightning: 0.4},
     ),
     Enemy(
       name: "Dust Devil Drone",
@@ -211,6 +231,7 @@ class EnemyPool {
       attack: 8,
       goldReward: 18,
       potentialLoot: [_pick(Rarity.common), _pick(Rarity.premium)],
+      attackType: DamageType.physical,
     ),
     Enemy(
       name: "Corrosion Elemental",
@@ -225,6 +246,8 @@ class EnemyPool {
         _pick(Rarity.unique),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.fire,
+      resistance: {DamageType.fire: 0.5, DamageType.physical: 0.2},
     ),
   ];
 
@@ -243,6 +266,8 @@ class EnemyPool {
         _pick(Rarity.unique),
         _pick(Rarity.unique),
       ],
+      attackType: DamageType.dark,
+      immunities: [DamageType.holy],
     ),
     Enemy(
       name: "Tomb Warden",
@@ -257,6 +282,9 @@ class EnemyPool {
         _pick(Rarity.unique),
         _pick(Rarity.legendary),
       ],
+      attackType: DamageType.holy,
+      immunities: [DamageType.dark],
+      resistance: {DamageType.physical: 0.3},
     ),
     Enemy(
       name: "Ghost Signal",
@@ -267,11 +295,13 @@ class EnemyPool {
       attack: 9,
       goldReward: 22,
       potentialLoot: [_pick(Rarity.premium), _pick(Rarity.unique)],
+      attackType: DamageType.void_,
+      resistance: {DamageType.physical: 0.5},
     ),
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Boss Enemies
+  // Boss Enemies (legacy, replaced by weekly boss system)
   // ─────────────────────────────────────────────────────────────────────────
   static final List<Enemy> bossEnemies = [
     Enemy(
@@ -287,6 +317,9 @@ class EnemyPool {
         _pick(Rarity.unique),
         _pick(Rarity.legendary),
       ],
+      attackType: DamageType.physical,
+      immunities: [DamageType.physical],
+      bossTier: 1,
     ),
     Enemy(
       name: "NEXUS WORLD-EATER",
@@ -297,6 +330,9 @@ class EnemyPool {
       attack: 14,
       goldReward: 120,
       potentialLoot: [_pick(Rarity.unique), _pick(Rarity.legendary)],
+      attackType: DamageType.void_,
+      immunities: [DamageType.void_],
+      bossTier: 2,
     ),
     Enemy(
       name: "RING OMNI-BEAST",
@@ -310,6 +346,9 @@ class EnemyPool {
         _pick(Rarity.unique),
         _pick(Rarity.legendary),
       ],
+      attackType: DamageType.fire,
+      immunities: [DamageType.fire],
+      bossTier: 3,
     ),
   ];
 
@@ -339,14 +378,47 @@ class EnemyPool {
         pool = graveyardEnemies;
         break;
       case ZoneType.citadel:
-        // Citadel uses bosses or tough standard enemies
         if (_random.nextDouble() < 0.3) {
           return getRandomBossEnemy();
         }
-        pool = graveyardEnemies; // Reuse graveyard enemies as baseline
+        pool = graveyardEnemies;
         break;
       case ZoneType.town:
         pool = standardEnemies;
+        break;
+      // New zones use appropriate enemy pools
+      case ZoneType.ruins:
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.swamp:
+        pool = forestEnemies;
+        break;
+      case ZoneType.mountain:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.desert:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.library:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.factory:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.ocean:
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.volcano:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.tower:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.abyss:
+        if (_random.nextDouble() < 0.4) {
+          return getRandomBossEnemy();
+        }
+        pool = graveyardEnemies;
         break;
     }
     return pool[_random.nextInt(pool.length)].clone();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 import '../models/character.dart';
+import '../models/damage_type.dart';
 import '../models/item.dart';
 import '../models/enemy.dart';
 import '../widgets/game_image.dart';
@@ -32,11 +33,14 @@ class _BattleScreenState extends State<BattleScreen> {
   Item? _droppedGear;
   List<String> logs = [];
 
+  // Compiled stats
   int netAttack = 0;
   int netBlock = 0;
   int netLifeSteal = 0;
   int netThorns = 0;
   double netCritChance = 0.0;
+  Map<DamageType, int> netBonusDamage = {};
+  Map<DamageType, int> netResistances = {};
 
   int _combatDelay = 700;
   int _speedLevel = 0;
@@ -46,22 +50,85 @@ class _BattleScreenState extends State<BattleScreen> {
   int _criticalHits = 0;
   int _turns = 0;
 
+  // Boss mechanic state
+  int _poisonTurns = 0;
+  int _poisonDamage = 0;
+  int _bossShield = 0;
+  DamageType _currentBossAttackType = DamageType.physical;
+  int _frozenTurns = 0;
+
   @override
   void initState() {
     super.initState();
     _compileEquipmentStats();
-    logs.add("🚨 Grid Confrontation initiated against ${widget.enemy.name}!");
+    _currentBossAttackType = widget.enemy.attackType;
+    if (widget.enemy.isBoss) {
+      logs.add("🚨 BOSS ENCOUNTER: ${widget.enemy.name}!");
+      logs.add(
+        "⚠️ Type: ${_currentBossAttackType.icon} ${_currentBossAttackType.label}",
+      );
+      if (widget.enemy.immunities.isNotEmpty) {
+        logs.add(
+          "🛡️ Immune to: ${widget.enemy.immunities.map((d) => "${d.icon}${d.label}").join(", ")}",
+        );
+      }
+      if (widget.enemy.mechanic != BossMechanic.none) {
+        logs.add("💀 Special: ${_getMechanicName(widget.enemy.mechanic)}");
+      }
+    } else {
+      logs.add("🚨 Grid Confrontation initiated against ${widget.enemy.name}!");
+      logs.add(
+        "⚔️ Enemy type: ${widget.enemy.attackType.icon} ${widget.enemy.attackType.label}",
+      );
+    }
+  }
+
+  String _getMechanicName(BossMechanic mechanic) {
+    switch (mechanic) {
+      case BossMechanic.damageReflection:
+        return 'Damage Reflection (${widget.enemy.mechanicValue}%)';
+      case BossMechanic.burn:
+        return 'Infernal Burn (+${widget.enemy.mechanicValue}/turn)';
+      case BossMechanic.freeze:
+        return 'Cryo Freeze (skip every ${widget.enemy.mechanicValue} turns)';
+      case BossMechanic.chainStrike:
+        return 'Chain Strike (2x every other turn)';
+      case BossMechanic.poison:
+        return 'Viral Poison (+${widget.enemy.mechanicValue}/turn for 3 turns)';
+      case BossMechanic.drainMaxHp:
+        return 'Void Drain (-${widget.enemy.mechanicValue} max HP)';
+      case BossMechanic.heal:
+        return 'Divine Regen (heals ${widget.enemy.mechanicValue}%/turn)';
+      case BossMechanic.enrage:
+        return 'Shadow Enrage (2x damage below 50% HP)';
+      case BossMechanic.shiftingTypes:
+        return 'Chaos Shift (changes element each turn)';
+      case BossMechanic.shield:
+        return 'Aegis Shield (absorbs ${widget.enemy.mechanicValue} damage)';
+      case BossMechanic.none:
+        return 'None';
+    }
   }
 
   void _compileEquipmentStats() {
     netAttack = widget.player.baseAttack;
     for (var item in widget.equippedSlots) {
       if (item == null) continue;
-      netAttack += item.attackBonus;
-      netBlock += item.damageReduction;
-      netLifeSteal += item.lifeSteal;
-      netThorns += item.thorns;
-      netCritChance += item.critChance;
+      netAttack += item.effectiveAttackBonus;
+      netBlock += item.effectiveDamageReduction;
+      netLifeSteal += item.effectiveLifeSteal;
+      netThorns += item.effectiveThorns;
+      netCritChance += item.effectiveCritChance;
+
+      // Compile bonus damage types
+      item.effectiveBonusDamage.forEach((type, value) {
+        netBonusDamage[type] = (netBonusDamage[type] ?? 0) + value;
+      });
+
+      // Compile resistances
+      item.effectiveFlatResistance.forEach((type, value) {
+        netResistances[type] = (netResistances[type] ?? 0) + value;
+      });
     }
   }
 
@@ -74,6 +141,79 @@ class _BattleScreenState extends State<BattleScreen> {
 
   void _togglePause() {
     setState(() => isPaused = !isPaused);
+  }
+
+  /// Calculate damage dealt to enemy, factoring in damage types and resistances
+  int _calculateDamageToEnemy(int baseDamage, bool isCrit) {
+    int totalDamage = baseDamage;
+
+    // Add bonus damage from damage types (reduced by enemy resistance)
+    netBonusDamage.forEach((type, value) {
+      if (widget.enemy.immunities.contains(type)) return; // Immune
+      final resistance = widget.enemy.resistance[type] ?? 0.0;
+      final effectiveDamage = (value * (1.0 - resistance)).round();
+      totalDamage += effectiveDamage;
+    });
+
+    if (isCrit) totalDamage *= 2;
+    return totalDamage;
+  }
+
+  /// Calculate damage dealt to player, factoring in resistances
+  int _calculateDamageToPlayer(int rawDamage) {
+    int totalDamage = rawDamage;
+
+    // Apply flat resistances based on enemy attack type
+    final playerResistance = netResistances[_currentBossAttackType] ?? 0;
+    totalDamage -= playerResistance;
+
+    return totalDamage.clamp(1, rawDamage);
+  }
+
+  void _applyBossMechanicOnPlayerTurn() {
+    final enemy = widget.enemy;
+    if (enemy.mechanic == BossMechanic.none) return;
+
+    switch (enemy.mechanic) {
+      case BossMechanic.damageReflection:
+        // Handled in damage calculation
+        break;
+      case BossMechanic.burn:
+        // Burn is applied when enemy attacks (handled in enemy turn)
+        break;
+      case BossMechanic.poison:
+        if (_poisonTurns > 0) {
+          widget.player.hp -= _poisonDamage;
+          _totalDamageTaken += _poisonDamage;
+          logs.add(
+            "☠️ Poison tick: -$_poisonDamage HP (${_poisonTurns - 1} turns left)",
+          );
+          _poisonTurns--;
+        }
+        break;
+      case BossMechanic.heal:
+        final healAmount = (enemy.maxHp * enemy.mechanicValue / 100).round();
+        enemy.hp = (enemy.hp + healAmount).clamp(0, enemy.maxHp);
+        logs.add("✨ Seraph heals for $healAmount HP!");
+        break;
+      case BossMechanic.shield:
+        if (_bossShield <= 0) {
+          _bossShield = enemy.mechanicValue;
+          logs.add(
+            "🛡️ The Architect deploys a shield! (${_bossShield} absorption)",
+          );
+        }
+        break;
+      case BossMechanic.shiftingTypes:
+        final types = DamageType.values;
+        _currentBossAttackType = types[Random().nextInt(types.length)];
+        logs.add(
+          "🌀 Chaos shifts to ${_currentBossAttackType.icon} ${_currentBossAttackType.label}!",
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   Future<void> triggerAsyncAutoBattleTicker() async {
@@ -92,24 +232,76 @@ class _BattleScreenState extends State<BattleScreen> {
       setState(() {
         _turns++;
 
-        bool isCritical = random.nextDouble() < netCritChance;
-        int activeStrikePower = isCritical ? netAttack * 2 : netAttack;
-        widget.enemy.hp -= activeStrikePower;
-        _totalDamageDealt += activeStrikePower;
-        if (isCritical) _criticalHits++;
+        // ── BOSS MECHANIC: Apply pre-attack effects ──
+        _applyBossMechanicOnPlayerTurn();
 
-        logs.add(
-          isCritical
-              ? "💥 CRITICAL STRIKE! Dealt $activeStrikePower damage!"
-              : "⚔️ You strike for $activeStrikePower damage.",
-        );
+        // ── FREEZE CHECK ──
+        if (widget.enemy.mechanic == BossMechanic.freeze &&
+            _turns % widget.enemy.mechanicValue == 0) {
+          _frozenTurns = 1;
+          logs.add("❄️ FROZEN! You cannot attack this turn!");
+        } else {
+          _frozenTurns = 0;
+        }
 
-        if (netLifeSteal > 0 && widget.enemy.hp > 0) {
-          widget.player.hp = (widget.player.hp + netLifeSteal).clamp(
-            0,
-            widget.player.maxHp,
+        // ── PLAYER ATTACK ──
+        if (_frozenTurns <= 0) {
+          bool isCritical = random.nextDouble() < netCritChance;
+          int baseDamage = netAttack;
+          int activeStrikePower = _calculateDamageToEnemy(
+            baseDamage,
+            isCritical,
           );
-          logs.add("🩸 Life-Steal Sync: Restored +$netLifeSteal HP.");
+
+          // Boss shield absorption
+          if (_bossShield > 0) {
+            final absorbed = min(_bossShield, activeStrikePower);
+            activeStrikePower -= absorbed;
+            _bossShield -= absorbed;
+            logs.add(
+              "🛡️ Shield absorbs $absorbed damage!${_bossShield <= 0 ? ' Shield broken!' : ''}",
+            );
+          }
+
+          widget.enemy.hp -= activeStrikePower;
+          _totalDamageDealt += activeStrikePower;
+          if (isCritical) _criticalHits++;
+
+          String damageTypesStr = '';
+          if (netBonusDamage.isNotEmpty) {
+            final activeTypes = netBonusDamage.entries
+                .where((e) => !widget.enemy.immunities.contains(e.key))
+                .map((e) => "${e.key.icon}${e.value}")
+                .join(" ");
+            if (activeTypes.isNotEmpty) damageTypesStr = " [$activeTypes]";
+          }
+
+          logs.add(
+            isCritical
+                ? "💥 CRITICAL STRIKE! Dealt $activeStrikePower damage!$damageTypesStr"
+                : "⚔️ You strike for $activeStrikePower damage.$damageTypesStr",
+          );
+
+          // Life steal
+          if (netLifeSteal > 0 && widget.enemy.hp > 0) {
+            widget.player.hp = (widget.player.hp + netLifeSteal).clamp(
+              0,
+              widget.player.maxHp,
+            );
+            logs.add("🩸 Life-Steal Sync: Restored +$netLifeSteal HP");
+          }
+
+          // Boss mechanic: Damage reflection
+          if (widget.enemy.mechanic == BossMechanic.damageReflection &&
+              activeStrikePower > 0) {
+            final reflected =
+                (activeStrikePower * widget.enemy.mechanicValue / 100).round();
+            if (reflected > 0) {
+              widget.player.hp -= reflected;
+              _totalDamageTaken += reflected;
+              logs.add("🪞 Reflection: -$reflected HP back to you!");
+            }
+          }
         }
 
         if (widget.enemy.hp <= 0) {
@@ -120,29 +312,73 @@ class _BattleScreenState extends State<BattleScreen> {
           return;
         }
 
-        int computedDamageToPlayer = (widget.enemy.attack - netBlock).clamp(
-          1,
+        // ── ENEMY ATTACK ──
+        int computedDamageToPlayer = _calculateDamageToPlayer(
           widget.enemy.attack,
         );
         widget.player.hp -= computedDamageToPlayer;
         _totalDamageTaken += computedDamageToPlayer;
         logs.add(
-          "🛡️ Enemy attacks for $computedDamageToPlayer (Blocked $netBlock).",
+          "🛡️ ${_currentBossAttackType.icon} Enemy attacks for $computedDamageToPlayer (${_currentBossAttackType.label}).",
         );
 
+        // Boss mechanic: Burn
+        if (widget.enemy.mechanic == BossMechanic.burn) {
+          widget.player.hp -= widget.enemy.mechanicValue;
+          _totalDamageTaken += widget.enemy.mechanicValue;
+          logs.add("🔥 Burn damage: -${widget.enemy.mechanicValue} HP");
+        }
+
+        // Boss mechanic: Chain Strike
+        if (widget.enemy.mechanic == BossMechanic.chainStrike &&
+            _turns % 2 == 0) {
+          int chainDamage = _calculateDamageToPlayer(widget.enemy.attack);
+          widget.player.hp -= chainDamage;
+          _totalDamageTaken += chainDamage;
+          logs.add("⚡ Chain Strike: -${chainDamage} additional damage!");
+        }
+
+        // Boss mechanic: Poison
+        if (widget.enemy.mechanic == BossMechanic.poison && _turns == 1) {
+          _poisonTurns = 3;
+          _poisonDamage = widget.enemy.mechanicValue;
+          logs.add(
+            "☠️ You have been poisoned! -${_poisonDamage}/turn for 3 turns",
+          );
+        }
+
+        // Boss mechanic: Drain Max HP
+        if (widget.enemy.mechanic == BossMechanic.drainMaxHp) {
+          widget.player.maxHp =
+              (widget.player.maxHp - widget.enemy.mechanicValue).clamp(1, 999);
+          logs.add("💀 Max HP drained! Now: ${widget.player.maxHp}");
+        }
+
+        // Boss mechanic: Enrage (double damage below 50%)
+        if (widget.enemy.mechanic == BossMechanic.enrage &&
+            widget.player.hp < widget.player.maxHp ~/ 2 &&
+            _turns > 1) {
+          int extraDamage = _calculateDamageToPlayer(widget.enemy.attack);
+          widget.player.hp -= extraDamage;
+          _totalDamageTaken += extraDamage;
+          logs.add("😡 ENRAGE! Shadow Lord strikes again for $extraDamage!");
+        }
+
+        // Thorns
         if (netThorns > 0) {
           widget.enemy.hp -= netThorns;
           _totalDamageDealt += netThorns;
           logs.add("🌵 Thorns Matrix: Reflected $netThorns damage.");
         }
 
+        // Auto-use consumables
         for (int i = 0; i < widget.equippedSlots.length; i++) {
           final item = widget.equippedSlots[i];
           if (item != null && item.isConsumable) {
             double currentHpPercent = widget.player.hp / widget.player.maxHp;
             double threshold = item.hpThreshold > 0 ? item.hpThreshold : 0.99;
             if (currentHpPercent < threshold) {
-              int actualHeal = item.healAmount;
+              int actualHeal = item.effectiveHealAmount;
               widget.player.hp = (widget.player.hp + actualHeal).clamp(
                 0,
                 widget.player.maxHp,
@@ -307,7 +543,9 @@ class _BattleScreenState extends State<BattleScreen> {
         height: 50,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: GameColors.primary,
+            backgroundColor: widget.enemy.isBoss
+                ? GameColors.gold
+                : GameColors.primary,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -315,9 +553,9 @@ class _BattleScreenState extends State<BattleScreen> {
             elevation: 4,
           ),
           onPressed: triggerAsyncAutoBattleTicker,
-          child: const Text(
-            "INITIALIZE COMBAT",
-            style: TextStyle(
+          child: Text(
+            widget.enemy.isBoss ? "ENGAGE BOSS" : "INITIALIZE COMBAT",
+            style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.2,
@@ -333,7 +571,7 @@ class _BattleScreenState extends State<BattleScreen> {
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
-            color: GameColors.primary,
+            color: widget.enemy.isBoss ? GameColors.gold : GameColors.primary,
             strokeWidth: 2.5,
           ),
         ),
@@ -341,7 +579,9 @@ class _BattleScreenState extends State<BattleScreen> {
         Text(
           isPaused ? "PAUSED" : "COMBAT IN PROGRESS...",
           style: TextStyle(
-            color: isPaused ? GameColors.warning : GameColors.primary,
+            color: isPaused
+                ? GameColors.warning
+                : (widget.enemy.isBoss ? GameColors.gold : GameColors.primary),
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
             fontSize: 12,
@@ -380,6 +620,78 @@ class _BattleScreenState extends State<BattleScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildDamageTypeRow() {
+    if (netBonusDamage.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: GameColors.surface,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.local_fire_department,
+              color: Colors.orange,
+              size: 12,
+            ),
+            const SizedBox(width: 4),
+            ...netBonusDamage.entries.map(
+              (e) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Text(
+                  "${e.key.icon}${e.value}",
+                  style: TextStyle(
+                    color: e.key.color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResistanceRow() {
+    if (netResistances.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: GameColors.surface,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.shield, color: Colors.cyan, size: 12),
+            const SizedBox(width: 4),
+            ...netResistances.entries.map(
+              (e) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Text(
+                  "${e.key.icon}${e.value}",
+                  style: TextStyle(
+                    color: e.key.color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -461,17 +773,23 @@ class _BattleScreenState extends State<BattleScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: GameColors.primary.withValues(alpha: 0.15),
+                      color: widget.enemy.isBoss
+                          ? GameColors.gold.withValues(alpha: 0.15)
+                          : GameColors.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: GameColors.primary.withValues(alpha: 0.4),
+                        color: widget.enemy.isBoss
+                            ? GameColors.gold.withValues(alpha: 0.4)
+                            : GameColors.primary.withValues(alpha: 0.4),
                       ),
                     ),
-                    child: const Text(
-                      "VS",
+                    child: Text(
+                      widget.enemy.isBoss ? "BOSS" : "VS",
                       style: TextStyle(
                         fontSize: 18,
-                        color: GameColors.primary,
+                        color: widget.enemy.isBoss
+                            ? GameColors.gold
+                            : GameColors.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -482,15 +800,18 @@ class _BattleScreenState extends State<BattleScreen> {
                       children: [
                         GameImage(
                           imagePath: widget.enemy.imagePath,
-                          fallbackIcon: Icons.adb,
+                          fallbackIcon: widget.enemy.isBoss
+                              ? Icons.psychology
+                              : Icons.adb,
                           size: 48,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           widget.enemy.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
+                            color: widget.enemy.isBoss ? GameColors.gold : null,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -501,6 +822,20 @@ class _BattleScreenState extends State<BattleScreen> {
                           height: 8,
                           showNumbers: true,
                         ),
+                        if (widget.enemy.isBoss &&
+                            widget.enemy.mechanic != BossMechanic.none)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              _getMechanicName(widget.enemy.mechanic),
+                              style: TextStyle(
+                                color: GameColors.warning,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -554,7 +889,15 @@ class _BattleScreenState extends State<BattleScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+
+            // ── DAMAGE TYPES & RESISTANCES ──
+            if (isFighting || _battleFinished) ...[
+              _buildDamageTypeRow(),
+              const SizedBox(height: 2),
+              _buildResistanceRow(),
+              const SizedBox(height: 4),
+            ],
 
             // ── BATTLE LOG ──
             Expanded(
@@ -583,6 +926,18 @@ class _BattleScreenState extends State<BattleScreen> {
                               ? GameColors.accent
                               : logs[i].contains('❌')
                               ? GameColors.danger
+                              : logs[i].contains('🔥')
+                              ? Colors.orangeAccent
+                              : logs[i].contains('❄️')
+                              ? Colors.cyanAccent
+                              : logs[i].contains('☠️')
+                              ? Colors.lightGreen
+                              : logs[i].contains('💀')
+                              ? Colors.deepPurpleAccent
+                              : logs[i].contains('✨')
+                              ? Colors.yellowAccent
+                              : logs[i].contains('🌀')
+                              ? Colors.purpleAccent
                               : Colors.grey,
                           fontFamily: 'monospace',
                           fontSize: 11,

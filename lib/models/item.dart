@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'damage_type.dart';
+
 enum SlotType { head, armor, weapon, item }
 
 enum Rarity { common, premium, unique, legendary }
@@ -61,6 +63,34 @@ extension RarityExtension on Rarity {
         return 3;
     }
   }
+
+  /// Number of bonus damage type slots for weapons
+  int get damageTypeSlots {
+    switch (this) {
+      case Rarity.common:
+        return 0;
+      case Rarity.premium:
+        return 1;
+      case Rarity.unique:
+        return 2;
+      case Rarity.legendary:
+        return 3;
+    }
+  }
+
+  /// Number of bonus resistance slots for armor
+  int get resistanceSlots {
+    switch (this) {
+      case Rarity.common:
+        return 0;
+      case Rarity.premium:
+        return 1;
+      case Rarity.unique:
+        return 2;
+      case Rarity.legendary:
+        return 3;
+    }
+  }
 }
 
 class Item {
@@ -79,6 +109,15 @@ class Item {
   final String? imagePath;
   final Rarity rarity;
 
+  /// Bonus damage per damage type (weapons). E.g. {DamageType.fire: 5}
+  final Map<DamageType, int> bonusDamage;
+
+  /// Flat resistance per damage type (armor/helm). E.g. {DamageType.fire: 3}
+  final Map<DamageType, int> flatResistance;
+
+  /// Upgrade level (0–5). Each level boosts stats by 20%.
+  final int upgradeLevel;
+
   const Item({
     required this.id,
     required this.name,
@@ -94,11 +133,198 @@ class Item {
     this.hpThreshold = 0.0,
     this.imagePath,
     this.rarity = Rarity.common,
+    this.bonusDamage = const {},
+    this.flatResistance = const {},
+    this.upgradeLevel = 0,
   });
 
   bool get isConsumable => healAmount > 0;
 
   int get sellValue => (cost * rarity.sellFraction).round();
+
+  static const int maxUpgradeLevel = 5;
+
+  /// Effective attackBonus after upgrade multiplier
+  int get effectiveAttackBonus {
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return (attackBonus * multiplier).round();
+  }
+
+  /// Effective damageReduction after upgrade multiplier
+  int get effectiveDamageReduction {
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return (damageReduction * multiplier).round();
+  }
+
+  /// Effective lifeSteal after upgrade multiplier
+  int get effectiveLifeSteal {
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return (lifeSteal * multiplier).round();
+  }
+
+  /// Effective thorns after upgrade multiplier
+  int get effectiveThorns {
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return (thorns * multiplier).round();
+  }
+
+  /// Effective critChance after upgrade
+  double get effectiveCritChance {
+    final multiplier = 1.0 + (upgradeLevel * 0.15);
+    return critChance * multiplier;
+  }
+
+  /// Effective healAmount after upgrade
+  int get effectiveHealAmount {
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return (healAmount * multiplier).round();
+  }
+
+  /// Effective bonus damage map after upgrade
+  Map<DamageType, int> get effectiveBonusDamage {
+    if (bonusDamage.isEmpty) return {};
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return bonusDamage.map((k, v) => MapEntry(k, (v * multiplier).round()));
+  }
+
+  /// Effective resistance map after upgrade
+  Map<DamageType, int> get effectiveFlatResistance {
+    if (flatResistance.isEmpty) return {};
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return flatResistance.map((k, v) => MapEntry(k, (v * multiplier).round()));
+  }
+
+  /// Number of damage type slots currently used
+  int get usedDamageTypeSlots => bonusDamage.length;
+
+  /// Number of available damage type slots based on rarity
+  int get availableDamageTypeSlots => rarity.damageTypeSlots;
+
+  /// Number of resistance slots currently used
+  int get usedResistanceSlots => flatResistance.length;
+
+  /// Number of available resistance slots based on rarity
+  int get availableResistanceSlots => rarity.resistanceSlots;
+
+  /// Whether this item can accept more damage types
+  bool get canAddDamageType =>
+      (type == SlotType.weapon) &&
+      usedDamageTypeSlots < availableDamageTypeSlots;
+
+  /// Whether this item can accept more resistances
+  bool get canAddResistance =>
+      (type == SlotType.armor || type == SlotType.head) &&
+      usedResistanceSlots < availableResistanceSlots;
+
+  /// Create a copy with modifications
+  Item copyWith({
+    String? id,
+    String? name,
+    SlotType? type,
+    String? description,
+    int? cost,
+    int? attackBonus,
+    int? damageReduction,
+    int? lifeSteal,
+    int? thorns,
+    double? critChance,
+    int? healAmount,
+    double? hpThreshold,
+    String? imagePath,
+    Rarity? rarity,
+    Map<DamageType, int>? bonusDamage,
+    Map<DamageType, int>? flatResistance,
+    int? upgradeLevel,
+  }) {
+    return Item(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      description: description ?? this.description,
+      cost: cost ?? this.cost,
+      attackBonus: attackBonus ?? this.attackBonus,
+      damageReduction: damageReduction ?? this.damageReduction,
+      lifeSteal: lifeSteal ?? this.lifeSteal,
+      thorns: thorns ?? this.thorns,
+      critChance: critChance ?? this.critChance,
+      healAmount: healAmount ?? this.healAmount,
+      hpThreshold: hpThreshold ?? this.hpThreshold,
+      imagePath: imagePath ?? this.imagePath,
+      rarity: rarity ?? this.rarity,
+      bonusDamage: bonusDamage ?? this.bonusDamage,
+      flatResistance: flatResistance ?? this.flatResistance,
+      upgradeLevel: upgradeLevel ?? this.upgradeLevel,
+    );
+  }
+
+  /// Upgrade this item to the next level (combine 3 copies)
+  Item? attemptUpgrade() {
+    if (upgradeLevel >= maxUpgradeLevel) return null;
+    return copyWith(upgradeLevel: upgradeLevel + 1);
+  }
+
+  /// Infuse a new damage type into a weapon
+  Item? infuseDamageType(DamageType damageType, int power) {
+    if (!canAddDamageType) return null;
+    if (bonusDamage.containsKey(damageType)) return null;
+    final newBonusDamage = Map<DamageType, int>.from(bonusDamage);
+    newBonusDamage[damageType] = power;
+    return copyWith(bonusDamage: newBonusDamage);
+  }
+
+  /// Infuse a new resistance into armor/helm
+  Item? infuseResistance(DamageType damageType, int power) {
+    if (!canAddResistance) return null;
+    if (flatResistance.containsKey(damageType)) return null;
+    final newResistance = Map<DamageType, int>.from(flatResistance);
+    newResistance[damageType] = power;
+    return copyWith(flatResistance: newResistance);
+  }
+
+  /// Infuse cost in credits (scales with rarity and upgrade level)
+  int get infuseCost {
+    int base = 0;
+    switch (rarity) {
+      case Rarity.common:
+        base = 15;
+        break;
+      case Rarity.premium:
+        base = 30;
+        break;
+      case Rarity.unique:
+        base = 50;
+        break;
+      case Rarity.legendary:
+        base = 80;
+        break;
+    }
+    return base + (upgradeLevel * 10);
+  }
+
+  /// Upgrade cost in credits
+  int get upgradeCost {
+    int base = 0;
+    switch (rarity) {
+      case Rarity.common:
+        base = 20;
+        break;
+      case Rarity.premium:
+        base = 40;
+        break;
+      case Rarity.unique:
+        base = 70;
+        break;
+      case Rarity.legendary:
+        base = 100;
+        break;
+    }
+    return base + (upgradeLevel * 15);
+  }
+
+  /// Check if player has enough of the same item to upgrade
+  static int countSameItem(List<Item> inventory, Item item) {
+    return inventory.where((i) => i.id == item.id).length;
+  }
 
   /// Attempt to roll a drop from [pool]. Returns null if nothing drops.
   static Item? rollDrop(List<Item> pool, {Random? rng}) {
@@ -136,6 +362,7 @@ class Item {
       cost: 8,
       attackBonus: 1,
       rarity: Rarity.common,
+      bonusDamage: {DamageType.physical: 1},
     ),
     Item(
       id: 'leather_vest',
@@ -192,6 +419,7 @@ class Item {
       cost: 25,
       damageReduction: 3,
       rarity: Rarity.premium,
+      flatResistance: {DamageType.physical: 2},
     ),
     Item(
       id: 'swift_ring',
@@ -211,6 +439,7 @@ class Item {
       attackBonus: 2,
       lifeSteal: 3,
       rarity: Rarity.premium,
+      bonusDamage: {DamageType.dark: 2},
     ),
     Item(
       id: 'spiked_pauldron',
@@ -221,6 +450,7 @@ class Item {
       damageReduction: 2,
       thorns: 3,
       rarity: Rarity.premium,
+      flatResistance: {DamageType.physical: 1},
     ),
     Item(
       id: 'nano_elixir',
@@ -301,6 +531,7 @@ class Item {
       attackBonus: 8,
       damageReduction: -2,
       rarity: Rarity.unique,
+      bonusDamage: {DamageType.dark: 4, DamageType.physical: 2},
     ),
     Item(
       id: 'glass_lens',
@@ -321,6 +552,7 @@ class Item {
       damageReduction: 4,
       critChance: -0.10,
       rarity: Rarity.unique,
+      flatResistance: {DamageType.physical: 3, DamageType.fire: 1},
     ),
     Item(
       id: 'plasma_cutter',
@@ -331,6 +563,7 @@ class Item {
       attackBonus: 5,
       critChance: 0.10,
       rarity: Rarity.unique,
+      bonusDamage: {DamageType.fire: 3, DamageType.lightning: 2},
     ),
     Item(
       id: 'reactive_plating',
@@ -341,6 +574,7 @@ class Item {
       damageReduction: 5,
       critChance: -0.15,
       rarity: Rarity.unique,
+      flatResistance: {DamageType.lightning: 3, DamageType.ice: 2},
     ),
     Item(
       id: 'phoenix_crest',
@@ -351,6 +585,7 @@ class Item {
       damageReduction: 2,
       lifeSteal: 2,
       rarity: Rarity.unique,
+      flatResistance: {DamageType.fire: 4},
     ),
     Item(
       id: 'vampire_plate',
@@ -361,6 +596,7 @@ class Item {
       damageReduction: 3,
       lifeSteal: 5,
       rarity: Rarity.unique,
+      flatResistance: {DamageType.dark: 3, DamageType.physical: 2},
     ),
 
     // ── LEGENDARY ──
@@ -385,6 +621,11 @@ class Item {
       critChance: 0.20,
       lifeSteal: 3,
       rarity: Rarity.legendary,
+      flatResistance: {
+        DamageType.void_: 4,
+        DamageType.dark: 3,
+        DamageType.holy: 2,
+      },
     ),
     Item(
       id: 'abyssal_edge',
@@ -396,6 +637,11 @@ class Item {
       attackBonus: 12,
       critChance: 0.10,
       rarity: Rarity.legendary,
+      bonusDamage: {
+        DamageType.void_: 5,
+        DamageType.dark: 4,
+        DamageType.physical: 3,
+      },
     ),
     Item(
       id: 'eternal_aegis',
@@ -407,6 +653,11 @@ class Item {
       damageReduction: 8,
       thorns: 5,
       rarity: Rarity.legendary,
+      flatResistance: {
+        DamageType.physical: 5,
+        DamageType.fire: 3,
+        DamageType.ice: 2,
+      },
     ),
     Item(
       id: 'seraph_module',
@@ -419,6 +670,169 @@ class Item {
       lifeSteal: 8,
       hpThreshold: 0.99,
       rarity: Rarity.legendary,
+    ),
+  ];
+
+  // ── BOSS-SPECIFIC LEGENDARY DROPS ──
+  static final List<Item> bossLegendaries = [
+    // Boss 1: CIPHER SENTINEL (Physical) - Reflective blade
+    Item(
+      id: 'boss_sentinel_edge',
+      name: "Sentinel's Reflex Edge",
+      type: SlotType.weapon,
+      description:
+          'Forged from the firewall of the Cipher Sentinel. Strikes bounce back at attackers.',
+      cost: 160,
+      attackBonus: 10,
+      thorns: 6,
+      critChance: 0.12,
+      rarity: Rarity.legendary,
+      bonusDamage: {DamageType.physical: 6, DamageType.lightning: 3},
+      flatResistance: {},
+    ),
+
+    // Boss 2: INFERNO CORE (Fire) - Burning armor
+    Item(
+      id: 'boss_inferno_core',
+      name: "Inferno Core Mantle",
+      type: SlotType.armor,
+      description:
+          'Pulsing with residual heat from the Inferno Core. Scorches all who dare strike it.',
+      cost: 170,
+      damageReduction: 6,
+      thorns: 8,
+      critChance: 0.08,
+      rarity: Rarity.legendary,
+      bonusDamage: {},
+      flatResistance: {DamageType.fire: 6, DamageType.physical: 3},
+    ),
+
+    // Boss 3: FROST WRAITH (Ice) - Freezing helm
+    Item(
+      id: 'boss_frost_crown',
+      name: "Wraith's Frozen Crown",
+      type: SlotType.head,
+      description:
+          'A crown of eternal ice harvested from the Frost Wraith. Crystallizes enemy protocols on contact.',
+      cost: 175,
+      damageReduction: 5,
+      critChance: 0.15,
+      lifeSteal: 3,
+      rarity: Rarity.legendary,
+      bonusDamage: {},
+      flatResistance: {DamageType.ice: 7, DamageType.lightning: 2},
+    ),
+
+    // Boss 4: STORM TITAN (Lightning) - Chain lightning gauntlet
+    Item(
+      id: 'boss_storm_gauntlet',
+      name: "Storm Titan's Gauntlet",
+      type: SlotType.weapon,
+      description:
+          'Channels devastating chain-lightning. Each strike arcs to nearby threats.',
+      cost: 180,
+      attackBonus: 12,
+      critChance: 0.18,
+      rarity: Rarity.legendary,
+      bonusDamage: {DamageType.lightning: 7, DamageType.physical: 3},
+    ),
+
+    // Boss 5: PLAGUE VECTOR (Poison) - Toxic shield
+    Item(
+      id: 'boss_plague_shield',
+      name: "Vector's Plague Barrier",
+      type: SlotType.armor,
+      description:
+          'Coated in self-replicating viral code. Infects any organism that makes physical contact.',
+      cost: 185,
+      damageReduction: 7,
+      lifeSteal: 4,
+      thorns: 3,
+      rarity: Rarity.legendary,
+      bonusDamage: {},
+      flatResistance: {DamageType.poison: 7, DamageType.dark: 3},
+    ),
+
+    // Boss 6: VOID SOVEREIGN (Void) - Void crown
+    Item(
+      id: 'boss_void_crown',
+      name: "Void Sovereign's Diadem",
+      type: SlotType.head,
+      description:
+          'A diadem carved from compressed void space. Drains the very essence of existence.',
+      cost: 190,
+      damageReduction: 5,
+      critChance: 0.20,
+      lifeSteal: 5,
+      rarity: Rarity.legendary,
+      bonusDamage: {},
+      flatResistance: {DamageType.void_: 8, DamageType.dark: 3},
+    ),
+
+    // Boss 7: SERAPH GUARDIAN (Holy) - Divine blade
+    Item(
+      id: 'boss_seraph_blade',
+      name: "Seraph's Divine裁决",
+      type: SlotType.weapon,
+      description:
+          'A blade of pure holy light. Heals the wielder with each righteous strike.',
+      cost: 200,
+      attackBonus: 11,
+      lifeSteal: 6,
+      critChance: 0.14,
+      rarity: Rarity.legendary,
+      bonusDamage: {DamageType.holy: 6, DamageType.physical: 4},
+    ),
+
+    // Boss 8: UMBRA LORD (Dark) - Shadow mantle
+    Item(
+      id: 'boss_umbral_mantle',
+      name: "Umbral Lord's Mantle",
+      type: SlotType.armor,
+      description:
+          'Woven from shadow protocols. Grows stronger as the wearer nears death.',
+      cost: 210,
+      damageReduction: 8,
+      critChance: 0.10,
+      lifeSteal: 4,
+      thorns: 5,
+      rarity: Rarity.legendary,
+      bonusDamage: {},
+      flatResistance: {DamageType.dark: 8, DamageType.physical: 3},
+    ),
+
+    // Boss 9: CHAOS ARBITER - Multi-element engine
+    Item(
+      id: 'boss_chaos_engine',
+      name: "Arbiter's Chaos Engine",
+      type: SlotType.item,
+      description:
+          'An unpredictable artifact that channels all elemental forces simultaneously. Unstable but devastating.',
+      cost: 220,
+      attackBonus: 8,
+      critChance: 0.22,
+      lifeSteal: 3,
+      rarity: Rarity.legendary,
+    ),
+
+    // Boss 10: THE ARCHITECT - Ultimate weapon
+    Item(
+      id: 'boss_architect_key',
+      name: "Architect's Master Key",
+      type: SlotType.weapon,
+      description:
+          'The supreme weapon of the Ring\'s creator. Rewrites the rules of combat with every swing.',
+      cost: 250,
+      attackBonus: 15,
+      critChance: 0.15,
+      lifeSteal: 5,
+      thorns: 3,
+      rarity: Rarity.legendary,
+      bonusDamage: {
+        DamageType.physical: 4,
+        DamageType.void_: 4,
+        DamageType.holy: 4,
+      },
     ),
   ];
 
