@@ -13,6 +13,9 @@ import 'models/enemy.dart';
 import 'models/boss.dart';
 import 'models/merchant.dart';
 import 'models/zone.dart';
+import 'models/npc.dart';
+import 'models/random_event.dart';
+import 'models/status_effect.dart';
 
 // Import Screens
 import 'screens/start_screen.dart';
@@ -24,6 +27,8 @@ import 'screens/shop_screen.dart';
 import 'screens/loot_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/game_over_screen.dart';
+import 'screens/gleed_screen.dart';
+import 'screens/event_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,6 +92,7 @@ class _GameControllerState extends State<GameController> {
   int hoursPassed = 0;
   ZoneType currentZone = ZoneType.town;
 
+  static const int maxInventorySize = 10;
   List<Item> inventory = [];
   List<Item?> equippedSlots = [];
 
@@ -96,21 +102,148 @@ class _GameControllerState extends State<GameController> {
   String? _detectedGoldColumn;
   BossEncounterTracker bossTracker = BossEncounterTracker();
   MerchantManager merchantManager = MerchantManager();
+  NPCManager npcManager = NPCManager();
+
+  // ── Pending event state ──
+  RandomEvent? _pendingEvent;
+
+  // ── Hyper-boss state ──
+  /// Last day on which the hyper boss for that week was triggered.
+  /// -1 means "never".
+  int lastHyperBossDay = -1;
+
+  /// When a hyper boss is queued and the player must immediately fight it.
+  bool _hyperBossQueued = false;
+
+  // ── Shop refresh state ──
+  /// In-game hour at which the cached shop stock was last (re)generated.
+  int lastShopRefreshHour = -1000;
+
+  // ── Merchant rotation state ──
+  /// In-game hour at which traveling merchants were last rotated.
+  int lastMerchantRotationHour = -1000;
 
   void changeScreen(String screenName) {
     setState(() => _currentScreen = screenName);
   }
 
+  /// Auto-equip items from a list of drops if matching empty slots exist.
+  /// Returns the list of items that could NOT be auto-equipped (still in drops).
+  List<Item> _autoEquipDrops(List<Item> drops) {
+    final List<Item> remaining = [];
+    for (final item in drops) {
+      bool equipped = false;
+      for (int i = 0; i < player!.slotLayout.length; i++) {
+        if (player!.slotLayout[i] == item.type && equippedSlots[i] == null) {
+          equippedSlots[i] = item;
+          equipped = true;
+          break;
+        }
+      }
+      if (!equipped) {
+        remaining.add(item);
+      }
+    }
+    return remaining;
+  }
+
+  /// Generates a fresh pool of items for the settlement shop.
+  List<Item> _generateShopStock() {
+    final random = Random();
+    final pool = List<Item>.from(Item.shopLootPool)..shuffle(random);
+    final count = 4 + random.nextInt(3);
+    return pool.take(count).toList();
+  }
+
+  /// Get the shop stock, regenerating it only if 24h have passed.
+  List<Item> _getOrRefreshShopStock() {
+    if (shopItems.isEmpty || (hoursPassed - lastShopRefreshHour) >= 24) {
+      shopItems = _generateShopStock();
+      lastShopRefreshHour = hoursPassed;
+    }
+    return shopItems;
+  }
+
+  /// Called after any `hoursPassed` change. If the player just rolled over
+  /// to a multiple-of-7 day (7, 14, 21, …) and the hyper boss for that
+  /// week hasn't been engaged yet, force the player into battle with it.
+  void _checkForHyperBoss() {
+    final currentDay = hoursPassed ~/ 24;
+    if (currentDay <= 0) return;
+    if (currentDay % 7 != 0) return;
+    if (currentDay == lastHyperBossDay) return;
+    // Already in battle – don't override.
+    if (_currentScreen == 'battle') return;
+
+    lastHyperBossDay = currentDay;
+    final boss = WeeklyBosses.getHyperBossForWeek(currentDay ~/ 7);
+    setState(() {
+      activeEnemy = boss;
+      _hyperBossQueued = true;
+      _currentScreen = 'battle';
+    });
+  }
+
   void mapsToZone(ZoneType targetZone) {
-    final oldDay = hoursPassed ~/ 24;
     setState(() {
       currentZone = targetZone;
-      hoursPassed += 12;
+      hoursPassed += 2; // travel now costs 2h
     });
-    if ((hoursPassed ~/ 24) > oldDay) {
-      merchantManager.rotateLocations();
+    merchantManager.rotateLocationsIfDue(hoursPassed);
+    npcManager.rotateLocationsIfDue(hoursPassed);
+
+    // Process status effect hourly ticks
+    if (player != null) {
+      player!.tickHourEffects();
+      player!.processHourlyEffects();
+      player!.removeExpiredEffects();
     }
+
+    // Check if player died from status effects during travel
+    if (player != null && player!.hp <= 0) {
+      player!.hp = 0;
+      syncPlayerStateToCloud();
+      changeScreen('game_over');
+      return;
+    }
+
+    // Roll for random event during travel (skip if destination is a settlement)
+    _rollForRandomEvent(destinationZone: targetZone);
+
     syncPlayerStateToCloud();
+    _checkForHyperBoss();
+
+    // Show pending random event if one was rolled
+    if (_pendingEvent != null) {
+      changeScreen('event');
+    }
+  }
+
+  void _rollForRandomEvent({ZoneType? destinationZone}) {
+    if (player == null) return;
+    // Don't trigger events when traveling to settlements (town, ruins, citadel)
+    if (destinationZone != null) {
+      final destData = Zone.worldMap[destinationZone];
+      if (destData != null && destData.isSettlement) return;
+    }
+    final currentDay = hoursPassed ~/ 24;
+    final luckMod = player!.getEffectiveLuck(equippedSlots).toDouble();
+    final event = EventPool.rollForEvent(
+      currentDay: currentDay,
+      currentZone: currentZone,
+      luckModifier: luckMod,
+    );
+    if (event != null) {
+      _pendingEvent = event;
+    }
+  }
+
+  /// Check if there's a pending event to show
+  RandomEvent? get pendingEvent => _pendingEvent;
+
+  /// Consume the pending event (set to null after showing)
+  void consumePendingEvent() {
+    _pendingEvent = null;
   }
 
   void _initLocalRun(Character chosenChar) {
@@ -125,6 +258,13 @@ class _GameControllerState extends State<GameController> {
       equippedSlots[startingSlotIdx] = chosenChar.startingItem;
       bossTracker = BossEncounterTracker();
       merchantManager = MerchantManager();
+      npcManager = NPCManager();
+      _pendingEvent = null;
+      lastHyperBossDay = -1;
+      _hyperBossQueued = false;
+      lastShopRefreshHour = -1000;
+      lastMerchantRotationHour = -1000;
+      shopItems = [];
       changeScreen('main');
     });
   }
@@ -195,6 +335,11 @@ class _GameControllerState extends State<GameController> {
         currentRunId = runId;
         equippedSlots = List.filled(chosenChar.slotLayout.length, null);
         equippedSlots[startingSlotIdx] = chosenChar.startingItem;
+        lastHyperBossDay = -1;
+        _hyperBossQueued = false;
+        lastShopRefreshHour = -1000;
+        lastMerchantRotationHour = -1000;
+        shopItems = [];
         changeScreen('main');
       });
     } catch (e) {
@@ -213,7 +358,7 @@ class _GameControllerState extends State<GameController> {
       Map<String, dynamic> payload = {
         'player_hp': player!.hp,
         'current_day': hoursPassed ~/ 24,
-        'status': (player!.hp <= 0 || hoursPassed >= 168) ? 'lost' : 'active',
+        'status': (player!.hp <= 0) ? 'lost' : 'active',
         'current_zone': currentZone.name,
       };
 
@@ -276,7 +421,6 @@ class _GameControllerState extends State<GameController> {
       });
     }
 
-    // Fixed: Added enclosing brackets to satisfy linter rule
     if (payload.isNotEmpty) {
       await supabase.from('run_inventory').insert(payload);
     }
@@ -293,6 +437,8 @@ class _GameControllerState extends State<GameController> {
         return MainScreen(
           player: player!,
           hoursPassed: hoursPassed,
+          currentZone: currentZone,
+          equippedSlots: equippedSlots,
           onChangeScreen: changeScreen,
         );
       case 'travel':
@@ -302,6 +448,7 @@ class _GameControllerState extends State<GameController> {
           player: player!,
           bossTracker: bossTracker,
           merchantManager: merchantManager,
+          npcManager: npcManager,
           onZoneTravel: mapsToZone,
           onAction: (type, data, cost) {
             setState(() {
@@ -310,20 +457,34 @@ class _GameControllerState extends State<GameController> {
                 activeEnemy = data;
                 changeScreen('battle');
               } else if (type == 'Shop') {
-                shopItems = data;
+                // Settlement shop: refresh only every 24h, otherwise
+                // re-use the cached stock.
+                shopItems = _getOrRefreshShopStock();
                 changeScreen('shop');
+              } else if (type == 'Gleed') {
+                changeScreen('gleed');
               } else if (type == 'Loot') {
                 foundLoot = data;
                 changeScreen('loot');
+              } else if (type == 'BuyItem') {
+                // Directly add purchased item to inventory
+                if (inventory.length < maxInventorySize) {
+                  inventory.add(data);
+                }
               } else if (type == 'Heal') {
                 player!.hp = player!.maxHp;
-              }
-
-              if (hoursPassed >= 168) {
-                changeScreen('game_over');
+              } else if (type == 'Empty') {
+                // Roll for random event during local exploration
+                _rollForRandomEvent();
               }
             });
             syncPlayerStateToCloud();
+            // Check for hyper boss after every time advance.
+            _checkForHyperBoss();
+            // Show pending random event if one was rolled
+            if (_pendingEvent != null) {
+              changeScreen('event');
+            }
           },
           onCancel: () => changeScreen('main'),
         );
@@ -332,26 +493,35 @@ class _GameControllerState extends State<GameController> {
           player: player!,
           equippedSlots: equippedSlots,
           enemy: activeEnemy!,
-          onEnd: (won, drop) {
+          isHyperBoss: _hyperBossQueued,
+          onEnd: (won, drops) {
             setState(() {
-              hoursPassed += 2; // Fighting costs 2 hours
+              hoursPassed += 1; // Battle now costs 1h
+              _hyperBossQueued = false;
               if (won) {
-                // Track weekly boss defeat
+                // Track weekly boss defeat (regular or hyper)
                 if (activeEnemy!.isBoss) {
                   final currentDay = hoursPassed ~/ 24;
                   bossTracker.markDefeated(currentDay);
                 }
-                if (drop != null) {
-                  inventory.add(drop);
+                if (drops.isNotEmpty) {
+                  // Auto-equip drops into empty matching slots
+                  final remaining = _autoEquipDrops(drops);
+                  // Add remaining to inventory (respect limit)
+                  for (final item in remaining) {
+                    if (inventory.length < maxInventorySize) {
+                      inventory.add(item);
+                    }
+                  }
                 }
               }
             });
             syncInventoryToCloud();
             syncPlayerStateToCloud();
-            if (hoursPassed >= 168) {
+            if (!won) {
               changeScreen('game_over');
             } else {
-              changeScreen(won ? 'main' : 'game_over');
+              changeScreen('main');
             }
           },
         );
@@ -360,6 +530,7 @@ class _GameControllerState extends State<GameController> {
           player: player!,
           inventory: inventory,
           equippedSlots: equippedSlots,
+          currentZone: currentZone,
           onBack: () {
             syncInventoryToCloud();
             syncPlayerStateToCloud();
@@ -377,12 +548,42 @@ class _GameControllerState extends State<GameController> {
             changeScreen('main');
           },
         );
+      case 'gleed':
+        return GleedScreen(
+          player: player!,
+          inventory: inventory,
+          maxInventory: maxInventorySize,
+          onExit: () {
+            syncPlayerStateToCloud();
+            syncInventoryToCloud();
+            changeScreen('main');
+          },
+          onCureStatus: () {
+            setState(() {
+              player!.attemptGamblingCure();
+            });
+          },
+        );
       case 'loot':
         return LootScreen(
           loot: foundLoot!,
+          inventoryCount: inventory.length,
+          maxInventory: maxInventorySize,
           onExtract: () {
             setState(() {
-              inventory.add(foundLoot!);
+              // Auto-equip if matching empty slot exists
+              bool equipped = false;
+              for (int i = 0; i < player!.slotLayout.length; i++) {
+                if (player!.slotLayout[i] == foundLoot!.type &&
+                    equippedSlots[i] == null) {
+                  equippedSlots[i] = foundLoot!;
+                  equipped = true;
+                  break;
+                }
+              }
+              if (!equipped) {
+                inventory.add(foundLoot!);
+              }
             });
             syncInventoryToCloud();
             changeScreen('main');
@@ -392,6 +593,122 @@ class _GameControllerState extends State<GameController> {
               player!.credits += foundLoot!.sellValue;
             });
             syncPlayerStateToCloud();
+            changeScreen('main');
+          },
+        );
+      case 'event':
+        return EventScreen(
+          event: _pendingEvent!,
+          playerCredits: player!.credits,
+          playerHp: player!.hp,
+          playerInventory: inventory,
+          maxInventory: maxInventorySize,
+          onComplete: (result) {
+            setState(() {
+              // Apply gold change
+              player!.credits = (player!.credits + result.goldChange).clamp(
+                0,
+                99999,
+              );
+
+              // Apply HP change
+              player!.hp = (player!.hp + result.hpChange).clamp(
+                0,
+                player!.effectiveMaxHp,
+              );
+
+              // Apply stat boosts (permanent attack increase)
+              if (result.statBoost > 0) {
+                player!.baseAttack += result.statBoost;
+              }
+
+              // Apply status effects
+              for (final effectType in result.statusEffectsToApply) {
+                switch (effectType) {
+                  case StatusEffectType.poison:
+                    player!.addStatusEffect(StatusEffectFactory.poison());
+                    break;
+                  case StatusEffectType.burn:
+                    player!.addStatusEffect(StatusEffectFactory.burn());
+                    break;
+                  case StatusEffectType.bleeding:
+                    player!.addStatusEffect(StatusEffectFactory.bleeding());
+                    break;
+                  case StatusEffectType.cursed:
+                    player!.addStatusEffect(StatusEffectFactory.cursed());
+                    break;
+                  case StatusEffectType.weakened:
+                    player!.addStatusEffect(StatusEffectFactory.weakened());
+                    break;
+                  case StatusEffectType.frozen:
+                    player!.addStatusEffect(StatusEffectFactory.frozen());
+                    break;
+                  case StatusEffectType.paralyzed:
+                    player!.addStatusEffect(StatusEffectFactory.paralyzed());
+                    break;
+                  case StatusEffectType.corruption:
+                    player!.addStatusEffect(StatusEffectFactory.corruption());
+                    break;
+                  case StatusEffectType.vulnerability:
+                    player!.addStatusEffect(
+                      StatusEffectFactory.vulnerability(),
+                    );
+                    break;
+                  case StatusEffectType.madness:
+                    player!.addStatusEffect(StatusEffectFactory.madness());
+                    break;
+                  case StatusEffectType.regeneration:
+                    player!.addStatusEffect(StatusEffectFactory.regeneration());
+                    break;
+                  case StatusEffectType.shieldAura:
+                    player!.addStatusEffect(StatusEffectFactory.shieldAura());
+                    break;
+                  case StatusEffectType.blessed:
+                    player!.addStatusEffect(StatusEffectFactory.blessed());
+                    break;
+                  case StatusEffectType.empowered:
+                    player!.addStatusEffect(StatusEffectFactory.empowered());
+                    break;
+                  case StatusEffectType.hasted:
+                    player!.addStatusEffect(StatusEffectFactory.hasted());
+                    break;
+                  case StatusEffectType.luckyBonus:
+                    player!.addStatusEffect(StatusEffectFactory.luckyBonus());
+                    break;
+                  case StatusEffectType.resistanceBoost:
+                    player!.addStatusEffect(
+                      StatusEffectFactory.resistanceBoost(),
+                    );
+                    break;
+                  case StatusEffectType.lifeStealAura:
+                    player!.addStatusEffect(
+                      StatusEffectFactory.lifeStealAura(),
+                    );
+                    break;
+                }
+              }
+
+              // Apply item gains
+              for (final item in result.itemsGained) {
+                if (inventory.length < maxInventorySize) {
+                  inventory.add(item);
+                }
+              }
+
+              // Check if player died from event
+              if (player!.hp <= 0) {
+                player!.hp = 0;
+                _pendingEvent = null;
+                syncPlayerStateToCloud();
+                changeScreen('game_over');
+                return;
+              }
+
+              // Consume the event and return to main
+              _pendingEvent = null;
+            });
+            syncPlayerStateToCloud();
+            syncInventoryToCloud();
             changeScreen('main');
           },
         );
@@ -409,6 +726,13 @@ class _GameControllerState extends State<GameController> {
               currentZone = ZoneType.town;
               bossTracker = BossEncounterTracker();
               merchantManager = MerchantManager();
+              npcManager = NPCManager();
+              _pendingEvent = null;
+              lastHyperBossDay = -1;
+              _hyperBossQueued = false;
+              lastShopRefreshHour = -1000;
+              lastMerchantRotationHour = -1000;
+              shopItems = [];
               _currentScreen = 'character_select';
             });
           },

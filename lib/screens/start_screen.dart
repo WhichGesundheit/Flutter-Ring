@@ -98,7 +98,7 @@ class _StartScreenState extends State<StartScreen>
               ),
               const SizedBox(height: 12),
               Text(
-                "Build optimization grid rogue-engine.",
+                "Endless optimization-grid rogue-engine.",
                 style: TextStyle(color: Colors.grey[500], fontSize: 14),
               ),
               const Spacer(flex: 2),
@@ -106,11 +106,11 @@ class _StartScreenState extends State<StartScreen>
               // ── Quick Tips ──
               if (!_showTutorial) ...[
                 _tipRow(
-                  Icons.access_time,
-                  "7-day time limit",
+                  Icons.all_inclusive,
+                  "Endless run · Hyper boss every 7 days",
                   GameColors.accent,
                 ),
-                _tipRow(Icons.explore, "6 unique zones", GameColors.success),
+                _tipRow(Icons.explore, "16 unique zones", GameColors.success),
                 _tipRow(
                   Icons.shield,
                   "Equipment & loot system",
@@ -156,8 +156,8 @@ class _StartScreenState extends State<StartScreen>
                           const SizedBox(height: 12),
                           _tutorialItem(
                             "⏱️",
-                            "TIME PRESSURE",
-                            "You have 168 hours (7 days). Every action costs time. Travel costs 12h, exploring costs 4h, fighting costs 2h.",
+                            "QUICK TIME",
+                            "Travel costs 2h, exploring costs 2h (or 1h for an empty result), and fighting costs 1h. Manage your time carefully.",
                           ),
                           _tutorialItem(
                             "🗺️",
@@ -167,17 +167,22 @@ class _StartScreenState extends State<StartScreen>
                           _tutorialItem(
                             "⚔️",
                             "COMBAT",
-                            "Encounters are auto-battles. Your equipped items determine ATK, DEF, Crit, LifeSteal, and Thorns.",
+                            "Encounters are auto-battles. Your equipped items determine ATK, DEF, Crit, LifeSteal, and Thorns. Boss drops are guaranteed.",
                           ),
                           _tutorialItem(
-                            "🎒",
-                            "EQUIPMENT",
-                            "Equip items in matching slots. Consumables auto-trigger during battle based on HP thresholds.",
+                            "🛒",
+                            "SHOPS",
+                            "Settlement and traveling-merchant shops refresh their stock every 24h. Merchants relocate every 48h.",
                           ),
                           _tutorialItem(
-                            "💰",
-                            "ECONOMY",
-                            "Earn credits from battles and scrapping loot. Buy gear at shops. Rest at the Inn to fully heal.",
+                            "⚡",
+                            "HYPER BOSS",
+                            "Every 7 days (day 7, 14, 21, …) a HYPER version of that week's unique boss forces engagement. It is 2.5× stronger and drops a much more powerful legendary.",
+                          ),
+                          _tutorialItem(
+                            "💀",
+                            "DEATH = END",
+                            "If your HP hits 0, the run ends. There is no day-limit — only the hyper-boss cycle continues.",
                           ),
                         ],
                       ),
@@ -261,7 +266,12 @@ class _StartScreenState extends State<StartScreen>
         children: [
           Icon(icon, color: color, size: 18),
           const SizedBox(width: 10),
-          Text(text, style: TextStyle(color: Colors.white60, fontSize: 13)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: Colors.white60, fontSize: 13),
+            ),
+          ),
         ],
       ),
     );

@@ -15,11 +15,11 @@ extension RarityExtension on Rarity {
       case Rarity.common:
         return 0.45;
       case Rarity.premium:
-        return 0.25;
+        return 0.22;
       case Rarity.unique:
-        return 0.12;
+        return 0.09;
       case Rarity.legendary:
-        return 0.04;
+        return 0.025;
     }
   }
 
@@ -108,6 +108,7 @@ class Item {
   final double hpThreshold;
   final String? imagePath;
   final Rarity rarity;
+  final int luckBonus;
 
   /// Bonus damage per damage type (weapons). E.g. {DamageType.fire: 5}
   final Map<DamageType, int> bonusDamage;
@@ -136,11 +137,18 @@ class Item {
     this.bonusDamage = const {},
     this.flatResistance = const {},
     this.upgradeLevel = 0,
+    this.luckBonus = 0,
   });
 
   bool get isConsumable => healAmount > 0;
 
   int get sellValue => (cost * rarity.sellFraction).round();
+
+  /// Effective luckBonus after upgrade multiplier
+  int get effectiveLuckBonus {
+    final multiplier = 1.0 + (upgradeLevel * 0.2);
+    return (luckBonus * multiplier).round();
+  }
 
   static const int maxUpgradeLevel = 5;
 
@@ -235,6 +243,7 @@ class Item {
     Map<DamageType, int>? bonusDamage,
     Map<DamageType, int>? flatResistance,
     int? upgradeLevel,
+    int? luckBonus,
   }) {
     return Item(
       id: id ?? this.id,
@@ -254,6 +263,7 @@ class Item {
       bonusDamage: bonusDamage ?? this.bonusDamage,
       flatResistance: flatResistance ?? this.flatResistance,
       upgradeLevel: upgradeLevel ?? this.upgradeLevel,
+      luckBonus: luckBonus ?? this.luckBonus,
     );
   }
 
@@ -327,12 +337,21 @@ class Item {
   }
 
   /// Attempt to roll a drop from [pool]. Returns null if nothing drops.
-  static Item? rollDrop(List<Item> pool, {Random? rng}) {
+  /// [luckModifier] is added to the base drop chance (e.g. 0.05 = +5%).
+  static Item? rollDrop(
+    List<Item> pool, {
+    Random? rng,
+    double luckModifier = 0.0,
+  }) {
     final random = rng ?? Random();
     // Shuffle to randomise evaluation order
     final candidates = List<Item>.from(pool)..shuffle(random);
     for (final item in candidates) {
-      if (random.nextDouble() < item.rarity.dropChance) {
+      final adjustedChance = (item.rarity.dropChance + luckModifier).clamp(
+        0.0,
+        1.0,
+      );
+      if (random.nextDouble() < adjustedChance) {
         return item;
       }
     }
@@ -386,9 +405,10 @@ class Item {
       id: 'lucky_charm',
       name: 'Lucky Charm',
       type: SlotType.item,
-      description: 'A small token that nudges fate. +5% Crit.',
+      description: 'A small token that nudges fate. +5% Crit, +2 Luck.',
       cost: 10,
       critChance: 0.05,
+      luckBonus: 2,
       rarity: Rarity.common,
     ),
     Item(
@@ -425,9 +445,10 @@ class Item {
       id: 'swift_ring',
       name: 'Swift Ring',
       type: SlotType.item,
-      description: 'A vibrating ring that accelerates reflexes.',
+      description: 'A vibrating ring that accelerates reflexes. +3 Luck.',
       cost: 20,
       critChance: 0.15,
+      luckBonus: 3,
       rarity: Rarity.premium,
     ),
     Item(
@@ -537,10 +558,11 @@ class Item {
       id: 'glass_lens',
       name: 'Glass Cannon Lens',
       type: SlotType.item,
-      description: 'Extreme precision. +35% Crit, -2 ATK.',
+      description: 'Extreme precision. +35% Crit, -2 ATK, +5 Luck.',
       cost: 45,
       critChance: 0.35,
       attackBonus: -2,
+      luckBonus: 5,
       rarity: Rarity.unique,
     ),
     Item(
@@ -832,6 +854,154 @@ class Item {
         DamageType.physical: 4,
         DamageType.void_: 4,
         DamageType.holy: 4,
+      },
+    ),
+  ];
+
+  // ── HYPER BOSS LEGENDARY DROPS (10 items, 1.6× stats, 1.5× cost) ──
+  static final List<Item> hyperBossLegendaries = [
+    // Hyper 1: CIPHER SENTINEL
+    Item(
+      id: 'hyper_sentinel_edge',
+      name: "⚡ Hyper Sentinel's Edge",
+      type: SlotType.weapon,
+      description:
+          'A blade of pure firewall energy, reforged under hyper-pressure. Reflects damage and amplifies output.',
+      cost: 240,
+      attackBonus: 16,
+      thorns: 10,
+      critChance: 0.18,
+      rarity: Rarity.legendary,
+      bonusDamage: {DamageType.physical: 10, DamageType.lightning: 6},
+    ),
+    // Hyper 2: INFERNO CORE
+    Item(
+      id: 'hyper_inferno_mantle',
+      name: "⚡ Hyper Inferno Mantle",
+      type: SlotType.armor,
+      description:
+          'Saturated in plasma-heat. Reflects damage back as burning thorns.',
+      cost: 255,
+      damageReduction: 10,
+      thorns: 13,
+      critChance: 0.12,
+      rarity: Rarity.legendary,
+      flatResistance: {DamageType.fire: 10, DamageType.physical: 5},
+    ),
+    // Hyper 3: FROST WRAITH
+    Item(
+      id: 'hyper_frost_crown',
+      name: "⚡ Hyper Frost Crown",
+      type: SlotType.head,
+      description:
+          'An ice helm that freezes enemy attacks on contact, with extreme life-drain.',
+      cost: 260,
+      damageReduction: 8,
+      critChance: 0.22,
+      lifeSteal: 5,
+      rarity: Rarity.legendary,
+      flatResistance: {DamageType.ice: 12, DamageType.lightning: 4},
+    ),
+    // Hyper 4: STORM TITAN
+    Item(
+      id: 'hyper_storm_gauntlet',
+      name: "⚡ Hyper Storm Gauntlet",
+      type: SlotType.weapon,
+      description:
+          'A hyper-charged gauntlet that arcs lightning through the entire grid.',
+      cost: 270,
+      attackBonus: 19,
+      critChance: 0.26,
+      rarity: Rarity.legendary,
+      bonusDamage: {DamageType.lightning: 12, DamageType.physical: 5},
+    ),
+    // Hyper 5: PLAGUE VECTOR
+    Item(
+      id: 'hyper_plague_shield',
+      name: "⚡ Hyper Plague Shield",
+      type: SlotType.armor,
+      description:
+          'A hyper-mutated bio-armor that leeches life and corrodes attackers.',
+      cost: 275,
+      damageReduction: 11,
+      lifeSteal: 7,
+      thorns: 5,
+      rarity: Rarity.legendary,
+      flatResistance: {DamageType.poison: 12, DamageType.dark: 5},
+    ),
+    // Hyper 6: VOID SOVEREIGN
+    Item(
+      id: 'hyper_void_crown',
+      name: "⚡ Hyper Void Diadem",
+      type: SlotType.head,
+      description:
+          'A hyper-compressed void diadem that tears at the very fabric of existence.',
+      cost: 285,
+      damageReduction: 8,
+      critChance: 0.30,
+      lifeSteal: 8,
+      rarity: Rarity.legendary,
+      flatResistance: {DamageType.void_: 13, DamageType.dark: 5},
+    ),
+    // Hyper 7: SERAPH GUARDIAN
+    Item(
+      id: 'hyper_seraph_blade',
+      name: "⚡ Hyper Seraph Blade",
+      type: SlotType.weapon,
+      description:
+          'A hyper-pure holy blade. Each strike heals the wielder for a percentage of damage dealt.',
+      cost: 300,
+      attackBonus: 18,
+      lifeSteal: 10,
+      critChance: 0.20,
+      rarity: Rarity.legendary,
+      bonusDamage: {DamageType.holy: 10, DamageType.physical: 6},
+    ),
+    // Hyper 8: UMBRA LORD
+    Item(
+      id: 'hyper_umbral_mantle',
+      name: "⚡ Hyper Umbral Mantle",
+      type: SlotType.armor,
+      description:
+          'A hyper-shadow mantle that massively amplifies damage as the wearer nears death.',
+      cost: 315,
+      damageReduction: 13,
+      critChance: 0.15,
+      lifeSteal: 7,
+      thorns: 8,
+      rarity: Rarity.legendary,
+      flatResistance: {DamageType.dark: 13, DamageType.physical: 5},
+    ),
+    // Hyper 9: CHAOS ARBITER
+    Item(
+      id: 'hyper_chaos_engine',
+      name: "⚡ Hyper Chaos Engine",
+      type: SlotType.item,
+      description:
+          'A hyper-unstable core that channels every elemental force at once, catastrophically.',
+      cost: 330,
+      attackBonus: 13,
+      critChance: 0.32,
+      lifeSteal: 5,
+      rarity: Rarity.legendary,
+    ),
+    // Hyper 10: THE ARCHITECT
+    Item(
+      id: 'hyper_architect_key',
+      name: "⚡ Hyper Architect Key",
+      type: SlotType.weapon,
+      description:
+          'The supreme hyper-weapon forged from the Architect\'s own code. Rewrites the rules of combat.',
+      cost: 375,
+      attackBonus: 24,
+      critChance: 0.22,
+      lifeSteal: 8,
+      thorns: 5,
+      rarity: Rarity.legendary,
+      bonusDamage: {
+        DamageType.physical: 7,
+        DamageType.void_: 7,
+        DamageType.holy: 7,
       },
     ),
   ];

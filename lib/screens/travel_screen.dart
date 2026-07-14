@@ -9,6 +9,7 @@ import '../models/merchant.dart';
 import '../models/enemy_pool.dart';
 import '../models/zone.dart';
 import '../models/character.dart';
+import '../models/npc.dart';
 import '../widgets/game_theme.dart';
 import '../widgets/stylish_popup.dart';
 
@@ -141,6 +142,7 @@ class TravelScreen extends StatefulWidget {
   final VoidCallback onCancel;
   final BossEncounterTracker? bossTracker;
   final MerchantManager? merchantManager;
+  final NPCManager? npcManager;
 
   const TravelScreen({
     super.key,
@@ -152,6 +154,7 @@ class TravelScreen extends StatefulWidget {
     required this.onCancel,
     this.bossTracker,
     this.merchantManager,
+    this.npcManager,
   });
 
   @override
@@ -162,6 +165,29 @@ class _TravelScreenState extends State<TravelScreen> {
   ZoneType? _selectedZone;
   final TransformationController _mapTransformController =
       TransformationController();
+  final GlobalKey _mapAreaKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _computeWorldPositions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _centerOnPlayer();
+    });
+  }
+
+  void _centerOnPlayer() {
+    final pos = _worldPositions[widget.currentZone];
+    if (pos == null) return;
+    final renderBox =
+        _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+    final size = renderBox.size;
+    final dx = size.width / 2 - pos.dx;
+    final dy = size.height / 2 - pos.dy;
+    _mapTransformController.value = Matrix4.identity()
+      ..setTranslationRaw(dx, dy, 0);
+  }
 
   int get _currentDay => widget.hoursPassed ~/ 24;
   bool _isAdjacent(ZoneType a, ZoneType b) =>
@@ -185,6 +211,13 @@ class _TravelScreenState extends State<TravelScreen> {
     final currentDay = widget.hoursPassed ~/ 24;
     return WeeklyBosses.bossEncounterDays.contains(currentDay) &&
         !(widget.bossTracker?.defeatedBosses.contains(currentDay) ?? false);
+  }
+
+  /// True on the day BEFORE a hyper boss (day 6, 13, 20, …) so the
+  /// player can see a warning in advance.
+  bool get _hyperBossTomorrow {
+    final tomorrow = _currentDay + 1;
+    return tomorrow > 0 && tomorrow % 7 == 0;
   }
 
   Enemy? _getNextBoss() {
@@ -225,10 +258,11 @@ class _TravelScreenState extends State<TravelScreen> {
 
   void _handleLocalAction(String action) {
     if (action == 'shop') {
-      final random = Random();
-      final pool = List<Item>.from(Item.shopLootPool)..shuffle(random);
-      final count = 4 + random.nextInt(3);
-      widget.onAction('Shop', pool.take(count).toList(), 0);
+      // The controller owns the cached stock and refreshes it every 24h.
+      // We just notify it that the player wants to open the shop.
+      widget.onAction('Shop', null, 0);
+    } else if (action == 'gleed') {
+      widget.onAction('Gleed', null, 0);
     } else if (action == 'rest') {
       if (widget.player.credits >= 10) {
         widget.player.credits -= 10;
@@ -242,10 +276,13 @@ class _TravelScreenState extends State<TravelScreen> {
         );
       }
     } else if (action == 'npc') {
+      final zoneData = Zone.worldMap[widget.currentZone]!;
+      final zoneHints = _getZoneSpecificHints(widget.currentZone);
+      final hint = zoneHints[hashCode.abs() % zoneHints.length];
       showStylishPopup(
         context,
-        title: 'NPC',
-        message: "'The binary brush is thicker than usual today...'",
+        title: '${zoneData.name} NPC',
+        message: hint,
         icon: Icons.chat_bubble_outline,
         iconColor: Colors.lightBlueAccent,
       );
@@ -254,11 +291,11 @@ class _TravelScreenState extends State<TravelScreen> {
       final roll = random.nextDouble();
       if (roll < 0.6) {
         final enemy = EnemyPool.getEnemyForZone(widget.currentZone);
-        widget.onAction('Enemy', enemy, 4);
+        widget.onAction('Enemy', enemy, 2);
       } else if (roll < 0.9) {
         final loot =
             Item.chestLootPool[random.nextInt(Item.chestLootPool.length)];
-        widget.onAction('Loot', loot, 4);
+        widget.onAction('Loot', loot, 2);
       } else {
         showStylishPopup(
           context,
@@ -267,7 +304,7 @@ class _TravelScreenState extends State<TravelScreen> {
           icon: Icons.check_circle_outline,
           iconColor: Colors.tealAccent,
         );
-        widget.onAction('Empty', null, 2);
+        widget.onAction('Empty', null, 1);
       }
     }
   }
@@ -275,12 +312,13 @@ class _TravelScreenState extends State<TravelScreen> {
   void _challengeWeeklyBoss() {
     final boss = _getNextBoss();
     if (boss != null) {
-      widget.onAction('Enemy', boss, 4);
+      widget.onAction('Enemy', boss, 2);
     }
   }
 
   void _openMerchantShop(TravelingMerchant merchant) {
-    final stock = merchant.generateStock();
+    // Use the merchant's per-24h cached stock rather than rolling fresh.
+    final stock = merchant.getStock(widget.hoursPassed);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(
@@ -313,6 +351,13 @@ class _TravelScreenState extends State<TravelScreen> {
                           ),
                         ),
                       ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Stock refreshes every 24h · Merchant moves every 48h',
+                        style: TextStyle(color: Colors.white24, fontSize: 10),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -398,7 +443,7 @@ class _TravelScreenState extends State<TravelScreen> {
                                 ? () {
                                     setState(() {
                                       widget.player.credits -= price;
-                                      widget.onAction('Loot', item, 0);
+                                      widget.onAction('BuyItem', item, 0);
                                     });
                                     showStylishPopup(
                                       context,
@@ -438,7 +483,7 @@ class _TravelScreenState extends State<TravelScreen> {
                       ),
                     ),
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text("Disconnect Terminal"),
+                    child: const Text("Go Back"),
                   ),
                 ),
               ),
@@ -447,6 +492,198 @@ class _TravelScreenState extends State<TravelScreen> {
         ),
       ),
     );
+  }
+
+  List<String> _getZoneSpecificHints(ZoneType zone) {
+    switch (zone) {
+      case ZoneType.town:
+        return [
+          "The hub is safe, but the grid beyond is not. Stock up before you leave.",
+          "Rumors say the Abyss holds the core of the Ring itself...",
+          "A hyper anomaly pulses through the grid every 7 cycles. Brace yourself.",
+          "Merchants at the outpost have the best gear, if you can afford it.",
+        ];
+      case ZoneType.forest:
+        return [
+          "The Binary Brush hides secrets among its fractal foliage. Watch for thorn vines.",
+          "Poison-type enemies lurk in the forest. Bring antidotes if you can.",
+          "The Deep Memory Caves lie to the west — ancient data awaits.",
+          "Some say a hidden path leads from the forest to the Tech-Graveyard.",
+        ];
+      case ZoneType.deepCaves:
+        return [
+          "The caves echo with deleted memories. Void-type enemies patrol here.",
+          "Dark-type creatures guard the deepest archives. Holy damage helps.",
+          "The Frozen Peak is to the north — bring fire resistance.",
+          "Ancient weapons lie buried in the cave walls. Keep your eyes open.",
+        ];
+      case ZoneType.wasteland:
+        return [
+          "The Static Wasteland is merciless. Lightning storms can strike without warning.",
+          "Rusthaven Outpost lies to the west — a settlement with supplies.",
+          "Electrical enemies thrive here. Ground yourself if you can.",
+          "The Data Swamp borders the south. Toxic waste pools everywhere.",
+        ];
+      case ZoneType.graveyard:
+        return [
+          "The Tech-Graveyard is haunted by ghost subroutines. Holy damage is effective.",
+          "Dark-type revenants patrol the rusted circuits. Be cautious.",
+          "The Apex Citadel lies to the north — the last great settlement.",
+          "Ancient armories can be found hidden among the skeletal remains.",
+        ];
+      case ZoneType.citadel:
+        return [
+          "The Apex Citadel guards the path to the deep zones. Prepare well.",
+          "The Core Meltdown lies to the north — only the strongest survive there.",
+          "Legendary merchants sometimes pass through the citadel.",
+          "The Deep Net Ocean borders the east. Strange creatures lurk below.",
+        ];
+      case ZoneType.ruins:
+        return [
+          "Rusthaven Outpost offers shelter and trade. Don't rush past.",
+          "The Silicon Dunes lie to the east. Sandstorms of microchips await.",
+          "The Static Wasteland borders the north. Lightning strikes are common.",
+          "Salvage what you can from the ruins. Every credit counts.",
+        ];
+      case ZoneType.volcano:
+        return [
+          "The Core Meltdown is the gateway to the Abyss. Only the prepared descend.",
+          "Fire-type enemies dominate here. Bring ice resistance.",
+          "The Apex Citadel lies to the south. Retreat is always an option.",
+          "The deepest secrets of the Ring lie within the volcanic fissure.",
+        ];
+      case ZoneType.abyss:
+        return [
+          "The Digital Abyss — the deepest layer. Reality itself unravels here.",
+          "Boss-level threats lurk in the darkness. Maximum preparation is essential.",
+          "The only way back is through the Core Meltdown. Plan accordingly.",
+          "Legends say the Architect's final creation sleeps in the deepest void.",
+        ];
+      case ZoneType.swamp:
+        return [
+          "The Data Swamp is a quagmire of corrupted streams. Poison is everywhere.",
+          "The Decommissioned Factory lies to the east. Automatons guard it.",
+          "The Static Wasteland borders the north. Escape is possible if needed.",
+          "Toxic waste pools hide useful components. Risk vs. reward.",
+        ];
+      case ZoneType.mountain:
+        return [
+          "The Frozen Peak crystallizes unprotected code. Ice damage is common.",
+          "The Infinite Library lies to the north. Knowledge is power.",
+          "The Deep Memory Caves border the south. Ancient data awaits.",
+          "Cold resistance is essential on the peak. Don't underestimate the frost.",
+        ];
+      case ZoneType.desert:
+        return [
+          "The Silicon Dunes are vast and treacherous. Sandstorms strip armor.",
+          "The Decommissioned Factory lies to the east. Hostile automatons within.",
+          "Rusthaven Outpost borders the west. Resupply if needed.",
+          "Fire-type enemies roam the dunes. Heat resistance is wise.",
+        ];
+      case ZoneType.library:
+        return [
+          "The Infinite Library holds forgotten algorithms. Knowledge seekers prosper.",
+          "The Signal Tower lies to the north. Ancient broadcast signals still pulse.",
+          "The Frozen Peak borders the south. Ice creatures patrol the approach.",
+          "Research stations here can reveal enemy weaknesses. Ask the NPCs.",
+        ];
+      case ZoneType.factory:
+        return [
+          "The Decommissioned Factory runs wild with corrupted automatons.",
+          "The Silicon Dunes border the west. Lightning enemies roam there.",
+          "The Data Swamp lies to the south. Toxic waste pools surround the perimeter.",
+          "Factory automatons drop valuable components. Farm them if you dare.",
+        ];
+      case ZoneType.ocean:
+        return [
+          "The Deep Net Ocean is vast. Deleted files drift like bioluminescent jellyfish.",
+          "The Signal Tower borders the west. Ancient broadcasts echo from its antennae.",
+          "The Apex Citadel lies to the east. Resupply before venturing deeper.",
+          "Void-type creatures lurk in the deepest waters. Bring holy protection.",
+        ];
+      case ZoneType.tower:
+        return [
+          "The Signal Tower still broadcasts control signals across the Ring.",
+          "The Deep Net Ocean borders the east. Strange aquatic entities await.",
+          "The Infinite Library lies to the south. Ancient knowledge within.",
+          "Electromagnetic pulses can disrupt your systems. Shield up.",
+        ];
+      case ZoneType.neonBazaar:
+      case ZoneType.shadowMarket:
+        return [
+          "The bazaars trade in rare commodities. Prices are steep, but the gear is worth it.",
+          "Black market dealers know things the settlements don't. Ask around.",
+          "Watch your back in the markets. Not everyone plays fair.",
+          "Rare items pass through the bazaars. Check back often.",
+        ];
+      case ZoneType.crystalMines:
+      case ZoneType.echoCaverns:
+        return [
+          "The mines hold valuable crystals. Deeper veins are more dangerous.",
+          "Echo caverns carry whispers of the past. Listen carefully.",
+          "Crystal formations can boost your gear. Mine carefully.",
+          "The deeper you go, the richer the veins — and the deadlier the guardians.",
+        ];
+      case ZoneType.quantumRift:
+      case ZoneType.voidShrine:
+      case ZoneType.voidGate:
+        return [
+          "The void zones are the most dangerous. Maximum preparation required.",
+          "Reality fractures in the void. Keep your systems shielded.",
+          "The void gate is the final challenge. Only the strongest survive.",
+          "Pilgrims seek the shrine for power, but the void demands sacrifice.",
+        ];
+      case ZoneType.chromeDocks:
+        return [
+          "The chrome docks are a hub for smugglers and traders.",
+          "Data-ships bring rare cargo from distant sectors.",
+          "The docks are well-guarded, but the surrounding areas are dangerous.",
+          "Rare salvage washes up on the docks. Keep your eyes open.",
+        ];
+      case ZoneType.dataNexus:
+        return [
+          "The data nexus holds the Ring's collective knowledge.",
+          "Ancient algorithms power the nexus. Study them well.",
+          "The nexus connects all sectors. It's a strategic hub.",
+          "Data streams flow through here constantly. Information is power.",
+        ];
+      case ZoneType.ghostTerminal:
+        return [
+          "The ghost terminal still processes data from a forgotten age.",
+          "Residual AI consciousness haunts the terminals. Be cautious.",
+          "Ancient commands still echo through the terminal. Listen carefully.",
+          "The ghost terminal holds secrets of the Ring's early days.",
+        ];
+      case ZoneType.solarForge:
+      case ZoneType.plasmaFields:
+        return [
+          "The solar forge harnesses raw stellar energy. It's volatile.",
+          "Plasma fields crackle with charged particles. Fire resistance helps.",
+          "The forge once built the Ring's outer shell. Its secrets remain.",
+          "Energy-based enemies thrive in the plasma fields.",
+        ];
+      case ZoneType.neuralGarden:
+        return [
+          "The neural garden grows data like plants. Some fruits are poisonous.",
+          "Neural networks sprout from the ground here. Harvest carefully.",
+          "The garden is peaceful, but its guardians are fierce.",
+          "Rare information fruits grow in the garden's deepest reaches.",
+        ];
+      case ZoneType.circuitMarshes:
+        return [
+          "The circuit marshes are toxic. Bring protection.",
+          "Half-submerged circuits hide useful components.",
+          "Toxic coolant pools surround the marshes. Don't fall in.",
+          "Salvage what you can, but don't linger too long.",
+        ];
+      case ZoneType.obsidianSpire:
+        return [
+          "The obsidian spire pierces the clouds. Ancient defenses still guard it.",
+          "The spire's upper reaches hold the most valuable loot.",
+          "Defense systems in the spire are lethal. Proceed with extreme caution.",
+          "The spire is a gateway to the deepest zones. Prepare well.",
+        ];
+    }
   }
 
   void _travelToZone() {
@@ -458,7 +695,9 @@ class _TravelScreenState extends State<TravelScreen> {
     if (!zoneData.isUnlocked(_currentDay)) return;
 
     widget.onZoneTravel(_selectedZone!);
-    setState(() => _selectedZone = null);
+    if (mounted) {
+      setState(() => _selectedZone = null);
+    }
   }
 
   @override
@@ -489,7 +728,6 @@ class _TravelScreenState extends State<TravelScreen> {
   }
 
   Widget _buildHeader(Zone currentZoneData, int hours) {
-    final int hoursLeft = 168 - widget.hoursPassed;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -518,7 +756,7 @@ class _TravelScreenState extends State<TravelScreen> {
                   ),
                 ),
                 Text(
-                  'DAY $_currentDay  ·  $hours:00  ·  COLLAPSE IN ${hoursLeft}h',
+                  'DAY $_currentDay  ·  $hours:00',
                   style: const TextStyle(
                     color: Colors.white54,
                     fontSize: 11,
@@ -526,43 +764,6 @@ class _TravelScreenState extends State<TravelScreen> {
                   ),
                 ),
               ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              // Center on current zone
-              final pos = _worldPositions[widget.currentZone];
-              if (pos != null) {
-                _mapTransformController.value = Matrix4.identity();
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              margin: const EdgeInsets.only(right: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: const Icon(
-                Icons.center_focus_strong,
-                color: Colors.white54,
-                size: 16,
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: widget.onCancel,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new,
-                color: Colors.white54,
-                size: 16,
-              ),
             ),
           ),
         ],
@@ -578,46 +779,80 @@ class _TravelScreenState extends State<TravelScreen> {
       builder: (context, constraints) {
         const nodeRadius = 20.0;
 
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: InteractiveViewer(
-            transformationController: _mapTransformController,
-            constrained: false,
-            minScale: 0.2,
-            maxScale: 3.0,
-            boundaryMargin: const EdgeInsets.all(2000),
-            child: SizedBox(
-              width: _worldSize,
-              height: _worldSize,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // ── Connection lines ──
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    width: _worldSize,
-                    height: _worldSize,
-                    child: CustomPaint(
-                      painter: _ConnectionPainter(
-                        nodePositions: _worldPositions,
-                        currentDay: _currentDay,
+        return Stack(
+          children: [
+            ClipRRect(
+              key: _mapAreaKey,
+              borderRadius: BorderRadius.circular(8),
+              child: InteractiveViewer(
+                transformationController: _mapTransformController,
+                constrained: false,
+                minScale: 0.2,
+                maxScale: 3.0,
+                boundaryMargin: const EdgeInsets.all(2000),
+                child: SizedBox(
+                  width: _worldSize,
+                  height: _worldSize,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // ── Connection lines ──
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        width: _worldSize,
+                        height: _worldSize,
+                        child: CustomPaint(
+                          painter: _ConnectionPainter(
+                            nodePositions: _worldPositions,
+                            currentDay: _currentDay,
+                          ),
+                        ),
                       ),
-                    ),
+
+                      // ── Nodes ──
+                      for (final entry in Zone.worldMap.entries)
+                        _buildNodeWidget(entry.value, nodeRadius),
+
+                      // ── Merchant indicators ──
+                      if (widget.merchantManager != null)
+                        for (final merchant
+                            in widget.merchantManager!.merchants)
+                          _buildMerchantIndicator(merchant),
+                    ],
                   ),
-
-                  // ── Nodes ──
-                  for (final entry in Zone.worldMap.entries)
-                    _buildNodeWidget(entry.value, nodeRadius),
-
-                  // ── Merchant indicators ──
-                  if (widget.merchantManager != null)
-                    for (final merchant in widget.merchantManager!.merchants)
-                      _buildMerchantIndicator(merchant),
-                ],
+                ),
               ),
             ),
-          ),
+
+            // ── Floating center-map button (top left) ──
+            Positioned(
+              top: 8,
+              left: 8,
+              child: GestureDetector(
+                onTap: _centerOnPlayer,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF111522).withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.center_focus_strong,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -627,8 +862,11 @@ class _TravelScreenState extends State<TravelScreen> {
     final nodePos = _worldPositions[merchant.currentZone];
     if (nodePos == null) return const SizedBox.shrink();
 
-    // Only show if player is at the same zone
     final isPlayerHere = widget.currentZone == merchant.currentZone;
+    final isAdjacent = _isAdjacent(widget.currentZone, merchant.currentZone);
+
+    // Hide merchant indicator if not at same zone or adjacent
+    if (!isPlayerHere && !isAdjacent) return const SizedBox.shrink();
 
     return Positioned(
       left: nodePos.dx - 8,
@@ -639,39 +877,46 @@ class _TravelScreenState extends State<TravelScreen> {
             : () {
                 showStylishPopup(
                   context,
-                  title: 'MERCHANT NOT HERE',
-                  message:
-                      'Travel to the ${Zone.worldMap[merchant.currentZone]!.name} to access ${merchant.type.label}.',
-                  icon: Icons.store,
-                  iconColor: Colors.orangeAccent,
+                  title: '???',
+                  message: 'Unknown',
+                  icon: Icons.help_outline,
+                  iconColor: Colors.grey,
                 );
               },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          padding: isPlayerHere
+              ? const EdgeInsets.symmetric(horizontal: 5, vertical: 2)
+              : const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           decoration: BoxDecoration(
-            color: merchant.type == MerchantType.legendary
-                ? GameColors.gold.withValues(alpha: 0.9)
-                : Colors.tealAccent.withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(5),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    (merchant.type == MerchantType.legendary
-                            ? GameColors.gold
-                            : Colors.tealAccent)
-                        .withValues(alpha: 0.6),
-                blurRadius: 8,
-              ),
-            ],
+            color: isPlayerHere
+                ? (merchant.type == MerchantType.legendary
+                      ? GameColors.gold.withValues(alpha: 0.9)
+                      : Colors.tealAccent.withValues(alpha: 0.8))
+                : Colors.grey.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(isPlayerHere ? 5 : 12),
+            boxShadow: isPlayerHere
+                ? [
+                    BoxShadow(
+                      color:
+                          (merchant.type == MerchantType.legendary
+                                  ? GameColors.gold
+                                  : Colors.tealAccent)
+                              .withValues(alpha: 0.6),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
           ),
           child: Text(
-            "${merchant.type.icon} ${merchant.type.label}",
+            isPlayerHere ? "${merchant.type.icon} ${merchant.type.label}" : '?',
             style: TextStyle(
-              fontSize: 7,
+              fontSize: isPlayerHere ? 7 : 16,
               fontWeight: FontWeight.w900,
-              color: merchant.type == MerchantType.legendary
-                  ? Colors.black
-                  : Colors.black87,
+              color: isPlayerHere
+                  ? (merchant.type == MerchantType.legendary
+                        ? Colors.black
+                        : Colors.black87)
+                  : Colors.grey[300],
             ),
           ),
         ),
@@ -752,15 +997,27 @@ class _TravelScreenState extends State<TravelScreen> {
             ),
             if (isCurrent)
               Positioned(
-                top: -2,
-                right: -2,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: zone.color,
-                    border: Border.all(color: Colors.black, width: 1.5),
+                top: -8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Transform.rotate(
+                    angle: pi / 4,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: zone.color,
+                        border: Border.all(color: Colors.black, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: zone.color.withValues(alpha: 0.6),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -858,6 +1115,7 @@ class _TravelScreenState extends State<TravelScreen> {
       ),
       child: Column(
         children: [
+          if (_hyperBossTomorrow) _buildHyperBossWarning(),
           if (_hasBossAvailable) _buildBossAlert(),
 
           // Panel header with merchant indicator
@@ -898,6 +1156,97 @@ class _TravelScreenState extends State<TravelScreen> {
             child: selectedZoneData != null
                 ? _buildSelectedNodePanel(selectedZoneData)
                 : _buildCurrentZoneActions(currentZoneData),
+          ),
+
+          // ── Back button (floating at bottom) ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SizedBox(
+              width: double.infinity,
+              height: 36,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white54,
+                  side: BorderSide(color: Colors.white24),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_back_ios_new, size: 14),
+                label: const Text(
+                  'BACK TO BASE',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                onPressed: widget.onCancel,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHyperBossWarning() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.deepOrange.withValues(alpha: 0.25),
+            Colors.red.withValues(alpha: 0.15),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.deepOrangeAccent),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepOrange.withValues(alpha: 0.3),
+            blurRadius: 10,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.deepOrangeAccent.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.warning_amber,
+              color: Colors.deepOrangeAccent,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  '⚠️ HYPER BOSS INCOMING — TOMORROW',
+                  style: TextStyle(
+                    color: Colors.deepOrangeAccent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Prepare your loadout. Retreat will not be an option.',
+                  style: TextStyle(color: Colors.white60, fontSize: 9),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1112,7 +1461,7 @@ class _TravelScreenState extends State<TravelScreen> {
                 _badge('NOT ADJACENT', Colors.orangeAccent),
               const Spacer(),
               const Text(
-                '12h travel',
+                '2h travel',
                 style: TextStyle(color: Colors.white38, fontSize: 11),
               ),
             ],
@@ -1202,99 +1551,216 @@ class _TravelScreenState extends State<TravelScreen> {
   Widget _buildCurrentZoneActions(Zone zone) {
     final List<_ActionItem> actions;
 
-    switch (zone.type) {
-      case ZoneType.town:
-        actions = [
-          _ActionItem(
-            Icons.store,
-            'Supply Terminal',
-            Colors.orange[900]!,
-            () => _handleLocalAction('shop'),
-          ),
-          _ActionItem(
-            Icons.bed,
-            'Rest at Inn (10c)',
-            Colors.green[900]!,
-            () => _handleLocalAction('rest'),
-            enabled: widget.player.credits >= 10,
-          ),
-          _ActionItem(
-            Icons.chat,
-            'Talk to NPC',
-            Colors.blue[900]!,
-            () => _handleLocalAction('npc'),
-          ),
-        ];
-        break;
-      case ZoneType.forest:
-      case ZoneType.deepCaves:
-      case ZoneType.mountain:
-      case ZoneType.library:
-        actions = [
-          _ActionItem(
-            Icons.search,
-            'Scout Area',
-            Colors.red[900]!,
-            () => _handleLocalAction('explore'),
-          ),
-        ];
-        break;
-      case ZoneType.wasteland:
-      case ZoneType.desert:
-      case ZoneType.volcano:
-      case ZoneType.factory:
-        actions = [
-          _ActionItem(
-            Icons.search,
-            'Scavenge Ruins',
-            Colors.deepOrange[800]!,
-            () => _handleLocalAction('explore'),
-          ),
-        ];
-        break;
-      case ZoneType.graveyard:
-      case ZoneType.ruins:
-      case ZoneType.ocean:
-        actions = [
-          _ActionItem(
-            Icons.search,
-            'Salvage Components',
-            Colors.red[900]!,
-            () => _handleLocalAction('explore'),
-          ),
-        ];
-        break;
-      case ZoneType.swamp:
-        actions = [
-          _ActionItem(
-            Icons.search,
-            'Forage Data',
-            Colors.teal[800]!,
-            () => _handleLocalAction('explore'),
-          ),
-        ];
-        break;
-      case ZoneType.tower:
-      case ZoneType.citadel:
-        actions = [
-          _ActionItem(
-            Icons.search,
-            'Salvage Components',
-            Colors.red[900]!,
-            () => _handleLocalAction('explore'),
-          ),
-        ];
-        break;
-      case ZoneType.abyss:
-        actions = [
-          _ActionItem(
-            Icons.search,
-            'Descend Deeper',
-            Colors.deepPurple[800]!,
-            () => _handleLocalAction('explore'),
-          ),
-        ];
-        break;
+    if (zone.isSettlement) {
+      actions = [
+        _ActionItem(
+          Icons.store,
+          'Supply Terminal',
+          Colors.orange[900]!,
+          () => _handleLocalAction('shop'),
+        ),
+        _ActionItem(
+          Icons.bed,
+          'Rest at Inn (10c)',
+          Colors.green[900]!,
+          () => _handleLocalAction('rest'),
+          enabled: widget.player.credits >= 10,
+        ),
+        _ActionItem(
+          Icons.chat,
+          'Talk to NPC',
+          Colors.blue[900]!,
+          () => _handleLocalAction('npc'),
+        ),
+        _ActionItem(
+          Icons.casino,
+          "GLEED's Den",
+          Colors.amber[800]!,
+          () => _handleLocalAction('gleed'),
+        ),
+      ];
+    } else {
+      switch (zone.type) {
+        case ZoneType.forest:
+        case ZoneType.deepCaves:
+        case ZoneType.mountain:
+        case ZoneType.library:
+          actions = [
+            _ActionItem(
+              Icons.search,
+              'Scout Area',
+              Colors.red[900]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.wasteland:
+        case ZoneType.desert:
+        case ZoneType.volcano:
+        case ZoneType.factory:
+          actions = [
+            _ActionItem(
+              Icons.search,
+              'Scavenge Ruins',
+              Colors.deepOrange[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.graveyard:
+        case ZoneType.ocean:
+          actions = [
+            _ActionItem(
+              Icons.search,
+              'Salvage Components',
+              Colors.red[900]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.swamp:
+          actions = [
+            _ActionItem(
+              Icons.search,
+              'Forage Data',
+              Colors.teal[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.tower:
+          actions = [
+            _ActionItem(
+              Icons.search,
+              'Salvage Components',
+              Colors.red[900]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.abyss:
+          actions = [
+            _ActionItem(
+              Icons.search,
+              'Descend Deeper',
+              Colors.deepPurple[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        // New zones
+        case ZoneType.neonBazaar:
+        case ZoneType.shadowMarket:
+          actions = [
+            _ActionItem(
+              Icons.store,
+              'Visit Market',
+              Colors.pink[900]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.crystalMines:
+        case ZoneType.echoCaverns:
+          actions = [
+            _ActionItem(
+              Icons.diamond,
+              'Mine Crystals',
+              Colors.cyan[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.quantumRift:
+        case ZoneType.voidShrine:
+        case ZoneType.voidGate:
+          actions = [
+            _ActionItem(
+              Icons.blur_on,
+              'Explore the Void',
+              Colors.purple[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.chromeDocks:
+          actions = [
+            _ActionItem(
+              Icons.sailing,
+              'Scavenge Docks',
+              Colors.blueGrey[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.dataNexus:
+          actions = [
+            _ActionItem(
+              Icons.device_hub,
+              'Scan Data Streams',
+              Colors.blue[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.ghostTerminal:
+          actions = [
+            _ActionItem(
+              Icons.computer,
+              'Investigate Terminal',
+              Colors.green[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.solarForge:
+        case ZoneType.plasmaFields:
+          actions = [
+            _ActionItem(
+              Icons.electric_bolt,
+              'Scavenge Energy',
+              Colors.orange[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.neuralGarden:
+          actions = [
+            _ActionItem(
+              Icons.eco,
+              'Forage Data',
+              Colors.lightGreen[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.circuitMarshes:
+          actions = [
+            _ActionItem(
+              Icons.water,
+              'Salvage Components',
+              Colors.brown[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        case ZoneType.obsidianSpire:
+          actions = [
+            _ActionItem(
+              Icons.apartment,
+              'Ascend Spire',
+              Colors.grey[800]!,
+              () => _handleLocalAction('explore'),
+            ),
+          ];
+          break;
+        // Settlements (town, ruins, citadel) are handled above by isSettlement check.
+        case ZoneType.town:
+        case ZoneType.ruins:
+        case ZoneType.citadel:
+          actions = [];
+          break;
+      }
     }
 
     return ListView.separated(

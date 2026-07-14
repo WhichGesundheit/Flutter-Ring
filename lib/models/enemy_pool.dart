@@ -3,6 +3,7 @@ import 'damage_type.dart';
 import 'enemy.dart';
 import 'item.dart';
 import 'zone.dart';
+import 'status_effect.dart';
 
 class EnemyPool {
   static final Random _random = Random();
@@ -35,6 +36,8 @@ class EnemyPool {
         _pick(Rarity.premium),
       ],
       attackType: DamageType.physical,
+      inflictedEffects: [StatusEffectFactory.bleeding(hours: 8)],
+      inflictChance: 0.2,
     ),
     Enemy(
       name: "Crystalline Ghoul",
@@ -50,6 +53,8 @@ class EnemyPool {
         _pick(Rarity.premium),
       ],
       attackType: DamageType.ice,
+      inflictedEffects: [StatusEffectFactory.frozen(turns: 2)],
+      inflictChance: 0.25,
     ),
     Enemy(
       name: "Glitch Spectre",
@@ -66,6 +71,8 @@ class EnemyPool {
       ],
       attackType: DamageType.void_,
       immunities: [DamageType.physical],
+      inflictedEffects: [StatusEffectFactory.vulnerability(hours: 12)],
+      inflictChance: 0.3,
     ),
     Enemy(
       name: "Rust Crawler",
@@ -77,6 +84,8 @@ class EnemyPool {
       goldReward: 8,
       potentialLoot: [_pick(Rarity.common), _pick(Rarity.common)],
       attackType: DamageType.physical,
+      inflictedEffects: [StatusEffectFactory.bleeding(hours: 6)],
+      inflictChance: 0.15,
     ),
     Enemy(
       name: "Data Phantom",
@@ -93,6 +102,8 @@ class EnemyPool {
       ],
       attackType: DamageType.dark,
       resistance: {DamageType.physical: 0.3},
+      inflictedEffects: [StatusEffectFactory.weakened(hours: 12)],
+      inflictChance: 0.25,
     ),
     Enemy(
       name: "Iron Swarm",
@@ -416,6 +427,64 @@ class EnemyPool {
         break;
       case ZoneType.abyss:
         if (_random.nextDouble() < 0.4) {
+          return getRandomBossEnemy();
+        }
+        pool = graveyardEnemies;
+        break;
+      // New zones use appropriate enemy pools
+      case ZoneType.neonBazaar:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.crystalMines:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.quantumRift:
+        if (_random.nextDouble() < 0.5) {
+          return getRandomBossEnemy();
+        }
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.shadowMarket:
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.voidShrine:
+        if (_random.nextDouble() < 0.5) {
+          return getRandomBossEnemy();
+        }
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.chromeDocks:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.dataNexus:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.ghostTerminal:
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.solarForge:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.neuralGarden:
+        pool = forestEnemies;
+        break;
+      case ZoneType.circuitMarshes:
+        pool = forestEnemies;
+        break;
+      case ZoneType.echoCaverns:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.plasmaFields:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.obsidianSpire:
+        if (_random.nextDouble() < 0.4) {
+          return getRandomBossEnemy();
+        }
+        pool = graveyardEnemies;
+        break;
+      case ZoneType.voidGate:
+        if (_random.nextDouble() < 0.6) {
           return getRandomBossEnemy();
         }
         pool = graveyardEnemies;

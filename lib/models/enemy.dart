@@ -1,5 +1,6 @@
 import 'damage_type.dart';
 import 'item.dart';
+import 'status_effect.dart';
 
 /// Special mechanics for bosses
 enum BossMechanic {
@@ -44,6 +45,18 @@ class Enemy {
   /// Boss tier (1–10). Higher = stronger scaling.
   final int bossTier;
 
+  /// Whether this is a hyper version of a weekly boss (appears every 7 days).
+  final bool isHyper;
+
+  /// Status effects this enemy can inflict on the player
+  final List<StatusEffect> inflictedEffects;
+
+  /// Minimum number of turns before enemy can inflict status effects
+  final int turnsBeforeInflict;
+
+  /// Chance to inflict status effects after minimum turns (0.0-1.0)
+  final double inflictChance;
+
   /// Whether this is a boss enemy
   bool get isBoss => bossTier > 0;
 
@@ -62,6 +75,10 @@ class Enemy {
     this.mechanic = BossMechanic.none,
     this.mechanicValue = 0,
     this.bossTier = 0,
+    this.isHyper = false,
+    this.inflictedEffects = const [],
+    this.turnsBeforeInflict = 5,
+    this.inflictChance = 0.3,
   });
 
   factory Enemy.fromMap(Map<String, dynamic> map) {
@@ -101,6 +118,10 @@ class Enemy {
           ? 0
           : (mechanicValue * scaleFactor).round(),
       bossTier: bossTier,
+      isHyper: isHyper,
+      inflictedEffects: inflictedEffects.map((e) => e.clone()).toList(),
+      turnsBeforeInflict: turnsBeforeInflict,
+      inflictChance: inflictChance,
     );
   }
 
@@ -121,6 +142,10 @@ class Enemy {
       mechanic: mechanic,
       mechanicValue: mechanicValue,
       bossTier: bossTier,
+      isHyper: isHyper,
+      inflictedEffects: inflictedEffects.map((e) => e.clone()).toList(),
+      turnsBeforeInflict: turnsBeforeInflict,
+      inflictChance: inflictChance,
     );
   }
 }

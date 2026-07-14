@@ -4,12 +4,16 @@ import 'inventory_screen.dart';
 
 class LootScreen extends StatefulWidget {
   final Item loot;
+  final int inventoryCount;
+  final int maxInventory;
   final VoidCallback onExtract;
   final VoidCallback onScrap;
 
   const LootScreen({
     super.key,
     required this.loot,
+    this.inventoryCount = 0,
+    this.maxInventory = 10,
     required this.onExtract,
     required this.onScrap,
   });
@@ -38,6 +42,9 @@ class _LootScreenState extends State<LootScreen> {
     }
     if (widget.loot.critChance > 0) {
       stats.add("+${(widget.loot.critChance * 100).toInt()}% Crit");
+    }
+    if (widget.loot.luckBonus > 0) {
+      stats.add("+${widget.loot.luckBonus} Luck");
     }
 
     return Scaffold(
@@ -125,6 +132,7 @@ class _LootScreenState extends State<LootScreen> {
   }
 
   Widget _buildOpenChestView(List<String> stats) {
+    final color = rarityColor(widget.loot.rarity);
     return Column(
       key: const ValueKey('open_chest'),
       mainAxisAlignment: MainAxisAlignment.center,
@@ -135,29 +143,25 @@ class _LootScreenState extends State<LootScreen> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.green.withValues(alpha: 0.1),
+              color: color.withValues(alpha: 0.1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withValues(alpha: 0.2),
+                  color: color.withValues(alpha: 0.3),
                   blurRadius: 40,
                   spreadRadius: 15,
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.unarchive,
-              size: 100,
-              color: Colors.greenAccent,
-            ),
+            child: Icon(Icons.unarchive, size: 100, color: color),
           ),
         ),
         const SizedBox(height: 30),
-        const Text(
+        Text(
           "DECRYPTION COMPLETE",
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Colors.greenAccent,
+            color: color,
             letterSpacing: 2,
           ),
           textAlign: TextAlign.center,

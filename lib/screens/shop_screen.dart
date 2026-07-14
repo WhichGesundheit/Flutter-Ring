@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/character.dart';
+import '../models/damage_type.dart';
 import '../models/item.dart';
 import '../widgets/game_image.dart';
 import '../widgets/stylish_popup.dart';
+import '../widgets/game_theme.dart';
 
 class ShopScreen extends StatefulWidget {
   final Character player;
@@ -24,6 +26,23 @@ class ShopScreen extends StatefulWidget {
 
 class _ShopScreenState extends State<ShopScreen> {
   bool _showSellTab = false;
+
+  // Merchant dialog lines
+  static const List<String> merchantDialogs = [
+    "This gear will keep you alive out there. Trust me.",
+    "I've seen runners come and go. The ones who invest in good equipment survive longer.",
+    "That's a solid choice. Not the flashiest, but reliable.",
+    "You've got good taste. This piece has a history.",
+    "Careful with that one — it's powerful, but it demands skill.",
+    "Every item here has a story. Most of them end with someone walking away alive.",
+    "I've been doing this a long time. Take my advice — don't cheap out on defense.",
+    "The Ring doesn't forgive mistakes. Make sure you're prepared.",
+  ];
+
+  String _getMerchantDialog() {
+    final idx = DateTime.now().millisecond % merchantDialogs.length;
+    return merchantDialogs[idx];
+  }
 
   Color _rarityColor(Rarity r) {
     switch (r) {
@@ -59,6 +78,158 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
+  void _showInspectDialog(Item item) {
+    final color = _rarityColor(item.rarity);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1D2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: color.withValues(alpha: 0.5)),
+        ),
+        title: Row(
+          children: [
+            Icon(_getSlotIcon(item.type), color: color, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                item.name,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _rarityBadge(item.rarity),
+            const SizedBox(height: 12),
+            Text(
+              item.description,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(color: Colors.white24),
+            const SizedBox(height: 8),
+            if (item.attackBonus > 0)
+              _statRow('⚔️ Attack', '+${item.effectiveAttackBonus}'),
+            if (item.damageReduction > 0)
+              _statRow('🛡️ Block', '+${item.effectiveDamageReduction}'),
+            if (item.critChance > 0)
+              _statRow(
+                '💥 Crit',
+                '+${(item.effectiveCritChance * 100).toInt()}%',
+              ),
+            if (item.lifeSteal > 0)
+              _statRow('🩸 Life Steal', '+${item.effectiveLifeSteal}'),
+            if (item.thorns > 0)
+              _statRow('🌵 Thorns', '+${item.effectiveThorns}'),
+            if (item.healAmount > 0)
+              _statRow('💚 Heal', '+${item.effectiveHealAmount} HP'),
+            if (item.luckBonus > 0)
+              _statRow('🍀 Luck', '+${item.effectiveLuckBonus}'),
+            if (item.effectiveBonusDamage.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Bonus Damage:',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              ...item.effectiveBonusDamage.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    '${e.key.icon} ${e.key.label}: +${e.value}',
+                    style: TextStyle(
+                      color: e.key.color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (item.effectiveFlatResistance.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Resistances:',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              ...item.effectiveFlatResistance.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    '${e.key.icon} ${e.key.label}: +${e.value}',
+                    style: TextStyle(
+                      color: e.key.color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Cost: ${item.cost}c',
+                  style: const TextStyle(
+                    color: Colors.amberAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Sell: ${item.sellValue}c',
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('CLOSE', style: TextStyle(color: Colors.white54)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
   // BUILD
   // ═════════════════════════════════════════════════════════════════════════
@@ -69,7 +240,6 @@ class _ShopScreenState extends State<ShopScreen> {
         title: Text("Terminal Vendor  ·  Credits: ${widget.player.credits}"),
         automaticallyImplyLeading: false,
         actions: [
-          // Toggle buy/sell tabs
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Row(
@@ -88,6 +258,28 @@ class _ShopScreenState extends State<ShopScreen> {
       ),
       body: Column(
         children: [
+          // Merchant dialog at top
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: GameColors.surface.withValues(alpha: 0.5),
+            child: Row(
+              children: [
+                const Text('💬 ', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _getMerchantDialog(),
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(child: _showSellTab ? _buildSellList() : _buildBuyList()),
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -96,7 +288,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 minimumSize: const Size.fromHeight(50),
               ),
               onPressed: widget.onExit,
-              child: const Text("Disconnect Terminal"),
+              child: const Text("Go Back"),
             ),
           ),
         ],
@@ -104,7 +296,6 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  // ── Tab chip helper ──
   Widget _tabChip(String label, bool active, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -137,7 +328,6 @@ class _ShopScreenState extends State<ShopScreen> {
   // BUY TAB
   // ═════════════════════════════════════════════════════════════════════════
   Widget _buildBuyList() {
-    // Sort by rarity then cost
     final sorted = List<Item>.from(widget.items)
       ..sort((a, b) {
         final rarityCmp = a.rarity.sortOrder.compareTo(b.rarity.sortOrder);
@@ -203,40 +393,71 @@ class _ShopScreenState extends State<ShopScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: canBuy ? color : Colors.grey[800],
-                  foregroundColor: canBuy ? Colors.black : Colors.grey,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 32),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 28,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white54,
+                        side: BorderSide(color: Colors.white24),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 28),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      onPressed: () => _showInspectDialog(item),
+                      child: const Text(
+                        'Inspect',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
-                  elevation: 0,
-                ),
-                onPressed: canBuy
-                    ? () {
-                        setState(() {
-                          widget.player.credits -= item.cost;
-                          widget.inventory.add(item);
-                        });
-                        showStylishPopup(
-                          context,
-                          title: 'ACQUIRED',
-                          message:
-                              '${item.name} (${item.rarity.label}) transferred to storage.',
-                          icon: Icons.inventory_2,
-                          iconColor: _rarityColor(item.rarity),
-                        );
-                      }
-                    : null,
-                child: Text(
-                  '${item.cost}c',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 28,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: canBuy ? color : Colors.grey[800],
+                        foregroundColor: canBuy ? Colors.black : Colors.grey,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: const Size(0, 28),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: canBuy
+                          ? () {
+                              setState(() {
+                                widget.player.credits -= item.cost;
+                                widget.inventory.add(item);
+                              });
+                              showStylishPopup(
+                                context,
+                                title: 'ACQUIRED',
+                                message:
+                                    '${item.name} (${item.rarity.label}) transferred to storage.',
+                                icon: Icons.inventory_2,
+                                iconColor: _rarityColor(item.rarity),
+                              );
+                            }
+                          : null,
+                      child: Text(
+                        '${item.cost}c',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -258,7 +479,6 @@ class _ShopScreenState extends State<ShopScreen> {
       );
     }
 
-    // Sort inventory: rarity desc, then cost desc (most valuable first)
     final sorted = List<Item>.from(widget.inventory)
       ..sort((a, b) {
         final rarityCmp = b.rarity.sortOrder.compareTo(a.rarity.sortOrder);

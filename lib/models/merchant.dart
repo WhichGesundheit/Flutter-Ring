@@ -84,9 +84,14 @@ class TravelingMerchant {
   final MerchantType type;
   ZoneType currentZone;
 
+  /// Cached stock and the hour it was last generated.
+  /// The stock refreshes only every 24h.
+  List<Item>? _cachedStock;
+  int _lastStockRefreshHour = -1000;
+
   TravelingMerchant({required this.type, required this.currentZone});
 
-  /// Generate stock for this merchant
+  /// Generate stock for this merchant (always fresh; prefer [getStock] for cache)
   List<Item> generateStock({Random? rng}) {
     final random = rng ?? Random();
     switch (type) {
@@ -101,6 +106,16 @@ class TravelingMerchant {
       case MerchantType.legendary:
         return _generateLegendaryStock(random);
     }
+  }
+
+  /// Return the merchant's current stock, regenerating it only if 24h
+  /// have passed since the last refresh. Otherwise returns the cached list.
+  List<Item> getStock(int currentHour) {
+    if (_cachedStock == null || (currentHour - _lastStockRefreshHour) >= 24) {
+      _cachedStock = generateStock();
+      _lastStockRefreshHour = currentHour;
+    }
+    return _cachedStock!;
   }
 
   List<Item> _generateConsumableStock(Random random) {
@@ -150,6 +165,9 @@ class MerchantManager {
 
   final List<TravelingMerchant> merchants = [];
 
+  /// The last in-game hour at which merchants were rotated to new locations.
+  int lastRotationHour = -1000;
+
   MerchantManager() {
     _initMerchants();
   }
@@ -183,8 +201,17 @@ class MerchantManager {
     ]);
   }
 
-  /// Rotate merchants to new locations for a new day
-  void rotateLocations() {
+  /// Rotate merchants to new locations, but only if 48h have elapsed
+  /// since the last rotation. Called from the controller on every
+  /// in-game hour change.
+  void rotateLocationsIfDue(int currentHour) {
+    if ((currentHour - lastRotationHour) < 48) return;
+    _rotateLocations();
+    lastRotationHour = currentHour;
+  }
+
+  /// Force-rotate merchants (e.g. for tests or new-run setup).
+  void _rotateLocations() {
     final availableZones = ZoneType.values
         .where((z) => z != ZoneType.town)
         .toList();
@@ -204,5 +231,6 @@ class MerchantManager {
   void reset() {
     merchants.clear();
     _initMerchants();
+    lastRotationHour = -1000;
   }
 }

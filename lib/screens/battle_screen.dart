@@ -11,7 +11,13 @@ class BattleScreen extends StatefulWidget {
   final Character player;
   final List<Item?> equippedSlots;
   final Enemy enemy;
-  final Function(bool won, Item? drop) onEnd;
+
+  /// Whether the player is being forced into this battle by a hyper-boss
+  /// (the 7-day cycle event). Used to disable the "ENGAGE" button.
+  final bool isHyperBoss;
+
+  /// Returns a list of dropped items (can be empty).
+  final Function(bool won, List<Item> drops) onEnd;
 
   const BattleScreen({
     super.key,
@@ -19,6 +25,7 @@ class BattleScreen extends StatefulWidget {
     required this.equippedSlots,
     required this.enemy,
     required this.onEnd,
+    this.isHyperBoss = false,
   });
 
   @override
@@ -30,7 +37,7 @@ class _BattleScreenState extends State<BattleScreen> {
   bool isPaused = false;
   bool _battleFinished = false;
   bool _battleWon = false;
-  Item? _droppedGear;
+  List<Item> _droppedGear = [];
   List<String> logs = [];
 
   // Compiled stats
@@ -39,6 +46,7 @@ class _BattleScreenState extends State<BattleScreen> {
   int netLifeSteal = 0;
   int netThorns = 0;
   double netCritChance = 0.0;
+  int netLuck = 0;
   Map<DamageType, int> netBonusDamage = {};
   Map<DamageType, int> netResistances = {};
 
@@ -71,6 +79,10 @@ class _BattleScreenState extends State<BattleScreen> {
     super.initState();
     _compileEquipmentStats();
     _currentBossAttackType = widget.enemy.attackType;
+    if (widget.isHyperBoss) {
+      logs.add("🚨⚡ HYPER BOSS ENGAGED: ${widget.enemy.name}!");
+      logs.add("❌ NO RETREAT — this threat must be eliminated.");
+    }
     if (widget.enemy.isBoss) {
       logs.add("🚨 BOSS ENCOUNTER: ${widget.enemy.name}!");
       logs.add(
@@ -89,6 +101,14 @@ class _BattleScreenState extends State<BattleScreen> {
       logs.add(
         "⚔️ Enemy type: ${widget.enemy.attackType.icon} ${widget.enemy.attackType.label}",
       );
+    }
+    // Hyper boss: auto-start the fight (no opt-in screen).
+    if (widget.isHyperBoss) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !isFighting && !_battleFinished) {
+          triggerAsyncAutoBattleTicker();
+        }
+      });
     }
   }
 
@@ -128,6 +148,7 @@ class _BattleScreenState extends State<BattleScreen> {
       netLifeSteal += item.effectiveLifeSteal;
       netThorns += item.effectiveThorns;
       netCritChance += item.effectiveCritChance;
+      netLuck += item.effectiveLuckBonus;
 
       // Compile bonus damage types
       item.effectiveBonusDamage.forEach((type, value) {
@@ -139,6 +160,9 @@ class _BattleScreenState extends State<BattleScreen> {
         netResistances[type] = (netResistances[type] ?? 0) + value;
       });
     }
+
+    // Luck adds to crit chance (+1% per luck point)
+    netCritChance += netLuck * 0.01;
   }
 
   void _toggleSpeed() {
@@ -405,6 +429,15 @@ class _BattleScreenState extends State<BattleScreen> {
         // ── ENEMY STATUS EFFECTS: Burn/Venom DoT ──
         _processEnemyStatusEffects();
 
+        // Check if enemy died from DoT
+        if (widget.enemy.hp <= 0) {
+          widget.enemy.hp = 0;
+          logs.add("✅ Combat targets neutralized.");
+          isFighting = false;
+          _onBattleEnd(true);
+          return;
+        }
+
         // ── FREEZE CHECK (Boss mechanic on player) ──
         if (widget.enemy.mechanic == BossMechanic.freeze &&
             _turns % widget.enemy.mechanicValue == 0) {
@@ -571,6 +604,15 @@ class _BattleScreenState extends State<BattleScreen> {
           logs.add("🌵 Thorns Matrix: Reflected $netThorns damage.");
         }
 
+        // Check if enemy died from thorns
+        if (widget.enemy.hp <= 0) {
+          widget.enemy.hp = 0;
+          logs.add("✅ Combat targets neutralized.");
+          isFighting = false;
+          _onBattleEnd(true);
+          return;
+        }
+
         // Auto-use consumables
         for (int i = 0; i < widget.equippedSlots.length; i++) {
           final item = widget.equippedSlots[i];
@@ -599,37 +641,77 @@ class _BattleScreenState extends State<BattleScreen> {
         }
       });
     }
+
+    // Safety: if we exited the loop and battle isn't finished, check if enemy is dead
+    if (!_battleFinished && widget.enemy.hp <= 0) {
+      widget.enemy.hp = 0;
+      _onBattleEnd(true);
+    }
+  }
+
+  /// Compute the loot drops for the just-defeated enemy.
+  /// - For BOSS (non-hyper) enemies: drop ALL items in `potentialLoot`
+  ///   (guaranteed full-pool drop).
+  /// - For HYPER bosses: drop everything in `potentialLoot` (already
+  ///   pre-populated with the hyper-specific legendary + extras).
+  /// - For regular enemies: roll once, and if the roll returns null
+  ///   (no drop), fall back to the first item from the loot pool so the
+  ///   enemy always gives at least one item.
+  List<Item> _computeDrops() {
+    final pool = widget.enemy.potentialLoot;
+    if (pool.isEmpty) return const [];
+    if (widget.enemy.isBoss) {
+      return List<Item>.from(pool);
+    }
+    // Luck increases drop chance by 2% per luck point
+    final luckModifier = netLuck * 0.02;
+    final rolled = Item.rollDrop(pool, luckModifier: luckModifier);
+    if (rolled != null) return [rolled];
+    return [pool.first];
   }
 
   void _onBattleEnd(bool won) {
-    Item? drop;
-    if (won && widget.enemy.potentialLoot.isNotEmpty) {
-      drop = Item.rollDrop(widget.enemy.potentialLoot);
-    }
+    final drops = won ? _computeDrops() : <Item>[];
 
     setState(() {
       _battleFinished = true;
       _battleWon = won;
-      _droppedGear = drop;
+      _droppedGear = drops;
       if (won) {
         widget.player.credits += widget.enemy.goldReward;
       }
     });
 
-    _showSummaryPopup(won, drop);
+    _showSummaryPopup(won, drops);
   }
 
-  void _showSummaryPopup(bool won, Item? drop) {
+  Color _rarityColor(Rarity r) {
+    switch (r) {
+      case Rarity.common:
+        return Colors.grey;
+      case Rarity.premium:
+        return Colors.tealAccent;
+      case Rarity.unique:
+        return Colors.deepPurpleAccent;
+      case Rarity.legendary:
+        return Colors.amberAccent;
+    }
+  }
+
+  void _showSummaryPopup(bool won, List<Item> drops) {
     final StringBuffer summary = StringBuffer();
     summary.write(won ? 'Victory!' : 'Defeated.');
     if (won) {
       summary.write('\n+${widget.enemy.goldReward} Credits');
-    }
-    if (drop != null) {
-      summary.write('\n🎁 ${drop.name}');
+      for (final d in drops) {
+        summary.write('\n🎁 ${d.name} [${d.rarity.label.toUpperCase()}]');
+      }
     }
     summary.write('\n\n📊 Turns: $_turns  |  Dealt: $_totalDamageDealt');
     summary.write('\n   Taken: $_totalDamageTaken  |  Crits: $_criticalHits');
+    if (netLuck > 0) {
+      summary.write('\n🍀 Luck: $netLuck');
+    }
 
     showDialog(
       context: context,
@@ -654,7 +736,11 @@ class _BattleScreenState extends State<BattleScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                won ? 'THREAT RESOLVED' : 'SYSTEM FAILURE',
+                won
+                    ? (widget.isHyperBoss
+                          ? 'HYPER THREAT RESOLVED'
+                          : 'THREAT RESOLVED')
+                    : 'SYSTEM FAILURE',
                 style: TextStyle(
                   color: won ? GameColors.success : GameColors.danger,
                   fontSize: 16,
@@ -664,12 +750,14 @@ class _BattleScreenState extends State<BattleScreen> {
             ),
           ],
         ),
-        content: Text(
-          summary.toString(),
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        content: RichText(
+          text: TextSpan(
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              height: 1.5,
+            ),
+            children: _buildSummarySpans(drops, won),
           ),
         ),
         actions: [
@@ -696,11 +784,64 @@ class _BattleScreenState extends State<BattleScreen> {
     );
   }
 
+  List<TextSpan> _buildSummarySpans(List<Item> drops, bool won) {
+    final List<TextSpan> spans = [];
+    spans.add(
+      TextSpan(
+        text: won ? 'Victory!\n' : 'Defeated.\n',
+        style: TextStyle(
+          color: won ? GameColors.success : GameColors.danger,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+    if (won) {
+      spans.add(
+        TextSpan(
+          text: '+${widget.enemy.goldReward} Credits\n',
+          style: const TextStyle(color: Colors.amberAccent),
+        ),
+      );
+      for (final d in drops) {
+        final color = _rarityColor(d.rarity);
+        spans.add(
+          TextSpan(
+            text: '🎁 ${d.name} ',
+            style: const TextStyle(color: Colors.white70),
+          ),
+        );
+        spans.add(
+          TextSpan(
+            text: '[${d.rarity.label.toUpperCase()}]\n',
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
+        );
+      }
+    }
+    spans.add(
+      TextSpan(
+        text:
+            '\n📊 Turns: $_turns  |  Dealt: $_totalDamageDealt\n'
+            '   Taken: $_totalDamageTaken  |  Crits: $_criticalHits',
+        style: const TextStyle(color: Colors.white70),
+      ),
+    );
+    if (netLuck > 0) {
+      spans.add(
+        TextSpan(
+          text: '\n🍀 Luck: $netLuck',
+          style: const TextStyle(color: Colors.lightGreen),
+        ),
+      );
+    }
+    return spans;
+  }
+
   void _exitBattle() {
     if (_battleWon) {
       widget.onEnd(true, _droppedGear);
     } else {
-      widget.onEnd(false, null);
+      widget.onEnd(false, const []);
     }
   }
 
@@ -738,23 +879,27 @@ class _BattleScreenState extends State<BattleScreen> {
       );
     }
     if (!isFighting) {
+      // Hyper bosses auto-start the fight, so no manual button is shown.
+      final label = widget.isHyperBoss
+          ? "ENGAGING HYPER BOSS…"
+          : (widget.enemy.isBoss ? "ENGAGE BOSS" : "INITIALIZE COMBAT");
       return SizedBox(
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.enemy.isBoss
-                ? GameColors.gold
-                : GameColors.primary,
+            backgroundColor: widget.isHyperBoss
+                ? Colors.deepOrange
+                : (widget.enemy.isBoss ? GameColors.gold : GameColors.primary),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 4,
           ),
-          onPressed: triggerAsyncAutoBattleTicker,
+          onPressed: widget.isHyperBoss ? null : triggerAsyncAutoBattleTicker,
           child: Text(
-            widget.enemy.isBoss ? "ENGAGE BOSS" : "INITIALIZE COMBAT",
+            label,
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
@@ -771,7 +916,9 @@ class _BattleScreenState extends State<BattleScreen> {
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
-            color: widget.enemy.isBoss ? GameColors.gold : GameColors.primary,
+            color: widget.isHyperBoss
+                ? Colors.deepOrange
+                : (widget.enemy.isBoss ? GameColors.gold : GameColors.primary),
             strokeWidth: 2.5,
           ),
         ),
@@ -781,7 +928,11 @@ class _BattleScreenState extends State<BattleScreen> {
           style: TextStyle(
             color: isPaused
                 ? GameColors.warning
-                : (widget.enemy.isBoss ? GameColors.gold : GameColors.primary),
+                : (widget.isHyperBoss
+                      ? Colors.deepOrangeAccent
+                      : (widget.enemy.isBoss
+                            ? GameColors.gold
+                            : GameColors.primary)),
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
             fontSize: 12,
@@ -903,12 +1054,14 @@ class _BattleScreenState extends State<BattleScreen> {
     return Scaffold(
       backgroundColor: GameColors.background,
       appBar: AppBar(
+        backgroundColor: widget.isHyperBoss
+            ? Colors.deepOrange
+            : GameColors.surface,
         title: Text(
           _battleFinished
               ? (_battleWon ? "Victory" : "Defeated")
               : "vs ${widget.enemy.name}",
         ),
-        backgroundColor: GameColors.surface,
         leading: _battleFinished
             ? IconButton(
                 onPressed: _exitBattle,
@@ -937,6 +1090,25 @@ class _BattleScreenState extends State<BattleScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (widget.isHyperBoss)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 12,
+                ),
+                color: Colors.deepOrange.withValues(alpha: 0.25),
+                child: const Text(
+                  '⚡ HYPER BOSS — NO RETREAT ⚡',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.deepOrangeAccent,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             // ── COMBATANT DISPLAY ──
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -976,23 +1148,31 @@ class _BattleScreenState extends State<BattleScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: widget.enemy.isBoss
-                          ? GameColors.gold.withValues(alpha: 0.15)
-                          : GameColors.primary.withValues(alpha: 0.15),
+                      color: widget.isHyperBoss
+                          ? Colors.deepOrange.withValues(alpha: 0.15)
+                          : (widget.enemy.isBoss
+                                ? GameColors.gold.withValues(alpha: 0.15)
+                                : GameColors.primary.withValues(alpha: 0.15)),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: widget.enemy.isBoss
-                            ? GameColors.gold.withValues(alpha: 0.4)
-                            : GameColors.primary.withValues(alpha: 0.4),
+                        color: widget.isHyperBoss
+                            ? Colors.deepOrange.withValues(alpha: 0.6)
+                            : (widget.enemy.isBoss
+                                  ? GameColors.gold.withValues(alpha: 0.4)
+                                  : GameColors.primary.withValues(alpha: 0.4)),
                       ),
                     ),
                     child: Text(
-                      widget.enemy.isBoss ? "BOSS" : "VS",
+                      widget.isHyperBoss
+                          ? "HYPER"
+                          : (widget.enemy.isBoss ? "BOSS" : "VS"),
                       style: TextStyle(
                         fontSize: 18,
-                        color: widget.enemy.isBoss
-                            ? GameColors.gold
-                            : GameColors.primary,
+                        color: widget.isHyperBoss
+                            ? Colors.deepOrangeAccent
+                            : (widget.enemy.isBoss
+                                  ? GameColors.gold
+                                  : GameColors.primary),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1014,7 +1194,11 @@ class _BattleScreenState extends State<BattleScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: widget.enemy.isBoss ? GameColors.gold : null,
+                            color: widget.isHyperBoss
+                                ? Colors.deepOrangeAccent
+                                : (widget.enemy.isBoss
+                                      ? GameColors.gold
+                                      : null),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),

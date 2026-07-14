@@ -6,7 +6,8 @@ import 'item.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════════════
 /// WEEKLY BOSS DEFINITIONS – 10 unique bosses with unique mechanics
-/// Each boss appears on a rotating basis, getting stronger every week
+/// Each boss appears on a rotating basis, getting stronger every week.
+/// Every 7 days a HYPER version spawns, automatically engaging the player.
 /// ═══════════════════════════════════════════════════════════════════════════════
 class WeeklyBosses {
   static final Random _random = Random();
@@ -257,9 +258,52 @@ class WeeklyBosses {
     return scaled;
   }
 
-  /// Get boss encounter days within a 7-day run
-  /// Returns the day numbers when bosses appear
-  static List<int> get bossEncounterDays => [2, 4, 6, 7];
+  /// Get the HYPER version of the boss for a specific week.
+  /// Hyper bosses are 2.5× stronger (HP/attack/gold/mechanicValue)
+  /// and drop the much-stronger `Item.hyperBossLegendaries` weapon.
+  static Enemy getHyperBossForWeek(int week) {
+    final index = (week - 1) % allBosses.length;
+    final normal = getBossForWeek(week);
+    const double hyperScale = 2.5;
+
+    final hp = (normal.maxHp * hyperScale).round();
+    final atk = (normal.attack * hyperScale).round();
+    final gold = (normal.goldReward * hyperScale).round();
+    final mVal = normal.mechanic == BossMechanic.none
+        ? 0
+        : (normal.mechanicValue * hyperScale).round();
+
+    // Build the hyper loot pool: hyper-specific legendary + 2 random legendaries.
+    final List<Item> hyperLoot = [];
+    final hyperLegendary = Item.hyperBossLegendaries[index];
+    hyperLoot.add(hyperLegendary);
+    hyperLoot.add(_pick(Rarity.legendary));
+    hyperLoot.add(_pick(Rarity.legendary));
+
+    return Enemy(
+      name: '⚡ HYPER ${normal.name}',
+      description:
+          'A massively amplified construct of pure hostile code. '
+          '${normal.description}',
+      hp: hp,
+      maxHp: hp,
+      attack: atk,
+      goldReward: gold,
+      potentialLoot: hyperLoot,
+      imagePath: normal.imagePath,
+      attackType: normal.attackType,
+      immunities: List.from(normal.immunities),
+      resistance: Map.from(normal.resistance),
+      mechanic: normal.mechanic,
+      mechanicValue: mVal,
+      bossTier: normal.bossTier + 10, // ensure > 0 and visually elevated
+      isHyper: true,
+    );
+  }
+
+  /// Days within a 7-day window that the normal (opt-in) weekly boss appears.
+  /// Day 7 is reserved for the HYPER boss which is forced and cannot be skipped.
+  static List<int> get bossEncounterDays => [2, 4, 6];
 
   /// Get the boss for a specific encounter day and total day
   static Enemy getBossForEncounter(int encounterIndex, int currentDay) {

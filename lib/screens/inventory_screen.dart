@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/character.dart';
 import '../models/damage_type.dart';
 import '../models/item.dart';
+import '../models/zone.dart';
 import '../widgets/game_image.dart';
 import '../widgets/stylish_popup.dart';
 
@@ -39,10 +40,45 @@ Widget rarityBadge(Rarity r, {double fontSize = 8}) {
   );
 }
 
+enum SortType { rarity, damage, defense, stats, name }
+
+extension SortTypeExtension on SortType {
+  String get label {
+    switch (this) {
+      case SortType.rarity:
+        return 'Rarity';
+      case SortType.damage:
+        return 'Damage';
+      case SortType.defense:
+        return 'Defense';
+      case SortType.stats:
+        return 'Stats';
+      case SortType.name:
+        return 'Name';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case SortType.rarity:
+        return Icons.diamond;
+      case SortType.damage:
+        return Icons.flash_on;
+      case SortType.defense:
+        return Icons.shield;
+      case SortType.stats:
+        return Icons.analytics;
+      case SortType.name:
+        return Icons.sort_by_alpha;
+    }
+  }
+}
+
 class InventoryScreen extends StatefulWidget {
   final Character player;
   final List<Item> inventory;
   final List<Item?> equippedSlots;
+  final ZoneType currentZone;
   final VoidCallback onBack;
 
   const InventoryScreen({
@@ -50,6 +86,7 @@ class InventoryScreen extends StatefulWidget {
     required this.player,
     required this.inventory,
     required this.equippedSlots,
+    required this.currentZone,
     required this.onBack,
   });
 
@@ -60,8 +97,52 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen> {
   int? _selectedInventoryIndex;
   int? _selectedEquippedIndex;
+  SortType _currentSort = SortType.rarity;
+
+  static const int maxInventorySize = 10;
+
+  /// Get sorted inventory indices
+  List<int> _sortedIndices() {
+    final indices = List<int>.generate(widget.inventory.length, (i) => i);
+    indices.sort((a, b) {
+      final itemA = widget.inventory[a];
+      final itemB = widget.inventory[b];
+      switch (_currentSort) {
+        case SortType.rarity:
+          final r = itemB.rarity.sortOrder.compareTo(itemA.rarity.sortOrder);
+          if (r != 0) return r;
+          return itemB.cost.compareTo(itemA.cost);
+        case SortType.damage:
+          return itemB.effectiveAttackBonus.compareTo(
+            itemA.effectiveAttackBonus,
+          );
+        case SortType.defense:
+          return itemB.effectiveDamageReduction.compareTo(
+            itemA.effectiveDamageReduction,
+          );
+        case SortType.stats:
+          final statsA =
+              itemA.effectiveAttackBonus +
+              itemA.effectiveDamageReduction +
+              itemA.effectiveLifeSteal +
+              itemA.effectiveThorns +
+              (itemA.effectiveCritChance * 100).toInt();
+          final statsB =
+              itemB.effectiveAttackBonus +
+              itemB.effectiveDamageReduction +
+              itemB.effectiveLifeSteal +
+              itemB.effectiveThorns +
+              (itemB.effectiveCritChance * 100).toInt();
+          return statsB.compareTo(statsA);
+        case SortType.name:
+          return itemA.name.compareTo(itemB.name);
+      }
+    });
+    return indices;
+  }
 
   void _attemptEquipSequence(Item item, int inventoryIndex) {
+    // Find a matching empty slot first
     int targetingIndex = -1;
     for (int i = 0; i < widget.player.slotLayout.length; i++) {
       if (widget.player.slotLayout[i] == item.type &&
@@ -72,6 +153,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
 
     if (targetingIndex != -1) {
+      // Empty slot found - equip directly
       setState(() {
         widget.equippedSlots[targetingIndex] = item;
         widget.inventory.removeAt(inventoryIndex);
@@ -86,19 +168,58 @@ class _InventoryScreenState extends State<InventoryScreen> {
         iconColor: Colors.greenAccent,
       );
     } else {
-      showStylishPopup(
-        context,
-        title: 'SLOT UNAVAILABLE',
-        message: 'No open ${item.type.name.toUpperCase()} slot available.',
-        icon: Icons.warning_amber,
-        iconColor: Colors.orangeAccent,
-      );
+      // No empty slot - check if there's a slot of the same type (swap)
+      int swapIndex = -1;
+      for (int i = 0; i < widget.player.slotLayout.length; i++) {
+        if (widget.player.slotLayout[i] == item.type) {
+          swapIndex = i;
+          break;
+        }
+      }
+
+      if (swapIndex != -1) {
+        // Swap items
+        final currentlyEquipped = widget.equippedSlots[swapIndex];
+        setState(() {
+          widget.inventory.removeAt(inventoryIndex);
+          widget.inventory.add(currentlyEquipped!);
+          widget.equippedSlots[swapIndex] = item;
+          _selectedInventoryIndex = null;
+          _selectedEquippedIndex = null;
+        });
+        showStylishPopup(
+          context,
+          title: 'SWAPPED',
+          message: '${item.name} swapped with ${currentlyEquipped!.name}.',
+          icon: Icons.swap_horiz,
+          iconColor: Colors.cyanAccent,
+        );
+      } else {
+        showStylishPopup(
+          context,
+          title: 'SLOT UNAVAILABLE',
+          message: 'No open ${item.type.name.toUpperCase()} slot available.',
+          icon: Icons.warning_amber,
+          iconColor: Colors.orangeAccent,
+        );
+      }
     }
   }
 
   void _unequipItem(int index) {
     final item = widget.equippedSlots[index];
     if (item != null) {
+      if (widget.inventory.length >= maxInventorySize) {
+        showStylishPopup(
+          context,
+          title: 'INVENTORY FULL',
+          message:
+              'Cannot unequip — backpack is full ($maxInventorySize/$maxInventorySize).',
+          icon: Icons.warning_amber,
+          iconColor: Colors.orangeAccent,
+        );
+        return;
+      }
       setState(() {
         widget.inventory.add(item);
         widget.equippedSlots[index] = null;
@@ -114,6 +235,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
       );
     }
   }
+
+  void _salvageItem(Item item, int index) {
+    final sellValue = item.sellValue;
+    setState(() {
+      widget.inventory.removeAt(index);
+      widget.player.credits += sellValue;
+      _selectedInventoryIndex = null;
+      _selectedEquippedIndex = null;
+    });
+    showStylishPopup(
+      context,
+      title: 'SALVAGED',
+      message: '${item.name} salvaged for ${sellValue} credits.',
+      icon: Icons.recycling,
+      iconColor: Colors.orangeAccent,
+    );
+  }
+
+  bool get _isInSettlement =>
+      widget.currentZone == ZoneType.town ||
+      widget.currentZone == ZoneType.ruins ||
+      widget.currentZone == ZoneType.citadel;
 
   void _upgradeItem(Item item, int inventoryIndex) {
     final sameCount = Item.countSameItem(widget.inventory, item);
@@ -154,7 +297,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (upgraded == null) return;
 
     setState(() {
-      // Remove 2 copies from inventory (the base stays, 2 are consumed)
       int removed = 0;
       for (int i = widget.inventory.length - 1; i >= 0 && removed < 2; i--) {
         if (widget.inventory[i].id == item.id) {
@@ -162,7 +304,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
           removed++;
         }
       }
-      // Replace the original with the upgraded version
       final idx = widget.inventory.indexOf(item);
       if (idx >= 0) {
         widget.inventory[idx] = upgraded;
@@ -205,7 +346,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
       return;
     }
 
-    // Pick a random damage type that isn't already on the item
     final available = DamageType.values
         .where((dt) => !item.bonusDamage.containsKey(dt))
         .toList();
@@ -333,6 +473,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (item.effectiveHealAmount > 0) {
       stats.add("+${item.effectiveHealAmount} HP Heal");
     }
+    if (item.effectiveLuckBonus != 0) {
+      stats.add("+${item.effectiveLuckBonus} Luck");
+    }
 
     showDialog(
       context: context,
@@ -344,7 +487,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
                 side: BorderSide(
-                  color: isEquipped ? Colors.redAccent : Colors.tealAccent,
+                  color: isEquipped
+                      ? Colors.redAccent
+                      : rarityColor(item.rarity),
                   width: 1,
                 ),
               ),
@@ -477,7 +622,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             "Slots: ${item.usedDamageTypeSlots}/${item.availableDamageTypeSlots} (can infuse more)",
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white38,
                               fontSize: 9,
                             ),
@@ -491,7 +636,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           "Weapon slots: ${item.usedDamageTypeSlots}/${item.availableDamageTypeSlots} (can infuse damage types)",
-                          style: TextStyle(color: Colors.white38, fontSize: 9),
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                          ),
                         ),
                       ),
 
@@ -538,7 +686,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             "Slots: ${item.usedResistanceSlots}/${item.availableResistanceSlots} (can infuse more)",
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white38,
                               fontSize: 9,
                             ),
@@ -553,7 +701,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           "Armor slots: ${item.usedResistanceSlots}/${item.availableResistanceSlots} (can infuse resistances)",
-                          style: TextStyle(color: Colors.white38, fontSize: 9),
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                          ),
                         ),
                       ),
 
@@ -572,6 +723,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           : "No further description available.",
                       style: const TextStyle(color: Colors.grey, fontSize: 14),
                     ),
+                    if (!isEquipped && item.sellValue > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        "Salvage value: ${item.sellValue}c",
+                        style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -584,18 +746,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 ),
 
-                // Upgrade button (for non-equipped items in inventory)
+                // Upgrade button (for non-equipped items in inventory, town only)
                 if (!isEquipped && index != null && item.type != SlotType.item)
                   _buildUpgradeButton(item, index, setDialogState),
 
-                // Infuse buttons (for weapons in inventory)
+                // Infuse buttons (for weapons in inventory, town only)
                 if (!isEquipped &&
                     index != null &&
                     item.type == SlotType.weapon &&
                     item.canAddDamageType)
                   _buildInfuseDamageButton(item, index, setDialogState),
 
-                // Infuse buttons (for armor/head in inventory)
+                // Infuse buttons (for armor/head in inventory, town only)
                 if (!isEquipped &&
                     index != null &&
                     (item.type == SlotType.armor ||
@@ -635,7 +797,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     label: const Text("USE TO HEAL"),
                   ),
 
-                // Equip button
+                // Salvage button (for inventory items)
+                if (!isEquipped && index != null)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[900],
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showSalvageConfirmation(item, index);
+                    },
+                    icon: const Icon(Icons.recycling, size: 16),
+                    label: Text("SALVAGE (+${item.sellValue}c)"),
+                  ),
+
+                // Equip button (shows SWAP if slot is occupied)
                 if (!isEquipped && index != null)
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -647,7 +824,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       _attemptEquipSequence(item, index);
                     },
                     icon: const Icon(Icons.add_circle_outline, size: 16),
-                    label: const Text("EQUIP"),
+                    label: Text(_getEquipLabel(item)),
                   ),
 
                 // Unequip button
@@ -672,9 +849,68 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
+  String _getEquipLabel(Item item) {
+    // Check if there's an empty slot of this type
+    for (int i = 0; i < widget.player.slotLayout.length; i++) {
+      if (widget.player.slotLayout[i] == item.type &&
+          widget.equippedSlots[i] == null) {
+        return "EQUIP";
+      }
+    }
+    // Check if there's a slot of this type (would be a swap)
+    for (int i = 0; i < widget.player.slotLayout.length; i++) {
+      if (widget.player.slotLayout[i] == item.type) {
+        return "SWAP";
+      }
+    }
+    return "EQUIP";
+  }
+
+  void _showSalvageConfirmation(Item item, int index) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.orangeAccent),
+        ),
+        title: const Text(
+          "SALVAGE ITEM?",
+          style: TextStyle(
+            color: Colors.orangeAccent,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Salvage ${item.name} for ${item.sellValue} credits?\n\nThis cannot be undone.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[800],
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _salvageItem(item, index);
+            },
+            child: const Text("SALVAGE"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUpgradeButton(Item item, int index, StateSetter setDialogState) {
     final sameCount = Item.countSameItem(widget.inventory, item);
     final canUpgrade =
+        _isInSettlement &&
         sameCount >= 3 &&
         item.upgradeLevel < Item.maxUpgradeLevel &&
         widget.player.credits >= item.upgradeCost;
@@ -692,7 +928,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
           : null,
       icon: const Icon(Icons.upgrade, size: 16),
       label: Text(
-        "UPGRADE (+$item.upgradeLevel)\n$sameCount/3 · ${item.upgradeCost}c",
+        _isInSettlement
+            ? "UPGRADE (+$item.upgradeLevel)\n$sameCount/3 · ${item.upgradeCost}c"
+            : "UPGRADE (settlement only)\n$sameCount/3 · ${item.upgradeCost}c",
         style: const TextStyle(fontSize: 10),
       ),
     );
@@ -703,7 +941,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     int index,
     StateSetter setDialogState,
   ) {
-    final canInfuse = widget.player.credits >= item.infuseCost;
+    final canInfuse =
+        _isInSettlement && widget.player.credits >= item.infuseCost;
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: canInfuse ? Colors.deepOrange[800] : Colors.grey[800],
@@ -717,7 +956,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
           : null,
       icon: const Icon(Icons.local_fire_department, size: 16),
       label: Text(
-        "INFUSE DAMAGE\n${item.usedDamageTypeSlots}/${item.availableDamageTypeSlots} · ${item.infuseCost}c",
+        _isInSettlement
+            ? "INFUSE DAMAGE\n${item.usedDamageTypeSlots}/${item.availableDamageTypeSlots} · ${item.infuseCost}c"
+            : "INFUSE (settlement only)\n${item.usedDamageTypeSlots}/${item.availableDamageTypeSlots} · ${item.infuseCost}c",
         style: const TextStyle(fontSize: 10),
       ),
     );
@@ -728,7 +969,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     int index,
     StateSetter setDialogState,
   ) {
-    final canInfuse = widget.player.credits >= item.infuseCost;
+    final canInfuse =
+        _isInSettlement && widget.player.credits >= item.infuseCost;
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: canInfuse ? Colors.blue[800] : Colors.grey[800],
@@ -742,7 +984,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
           : null,
       icon: const Icon(Icons.shield, size: 16),
       label: Text(
-        "INFUSE RESIST\n${item.usedResistanceSlots}/${item.availableResistanceSlots} · ${item.infuseCost}c",
+        _isInSettlement
+            ? "INFUSE RESIST\n${item.usedResistanceSlots}/${item.availableResistanceSlots} · ${item.infuseCost}c"
+            : "INFUSE (settlement only)\n${item.usedResistanceSlots}/${item.availableResistanceSlots} · ${item.infuseCost}c",
         style: const TextStyle(fontSize: 10),
       ),
     );
@@ -816,14 +1060,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    const Row(
                       children: [
                         Icon(
                           Icons.upgrade,
                           color: Colors.amberAccent,
                           size: 14,
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
                         Text(
                           'UPGRADE SYSTEM',
                           style: TextStyle(
@@ -835,10 +1079,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    const Text(
                       '• Combine 3 same items → +1 upgrade level (+20% stats)\n'
                       '• Infuse weapons with damage types\n'
                       '• Infuse armor with resistances\n'
+                      '• Salvage items for credits\n'
                       '• Rarity determines max slots (Common:0, Premium:1, Unique:2, Legendary:3)',
                       style: TextStyle(
                         color: Colors.white38,
@@ -881,6 +1126,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 itemBuilder: (ctx, i) {
                   final requiredType = widget.player.slotLayout[i];
                   final activeItem = widget.equippedSlots[i];
+                  final itemColor = activeItem != null
+                      ? rarityColor(activeItem.rarity)
+                      : null;
 
                   return InkWell(
                     onTap: () {
@@ -899,14 +1147,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: activeItem != null
-                            ? Colors.red[950]?.withValues(alpha: 0.6)
+                            ? itemColor!.withValues(alpha: 0.1)
                             : Colors.grey[900],
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: _selectedEquippedIndex == i
                               ? Colors.redAccent
                               : (activeItem != null
-                                    ? Colors.red[900]!
+                                    ? itemColor!.withValues(alpha: 0.6)
                                     : Colors.transparent),
                           width: 1.5,
                         ),
@@ -945,7 +1193,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
                                           color: activeItem != null
-                                              ? Colors.white
+                                              ? itemColor
                                               : Colors.grey[600],
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -961,7 +1209,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                     activeItem.upgradeLevel > 0)
                                   Text(
                                     '+${activeItem.upgradeLevel} UPGRADED',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontSize: 7,
                                       color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,
@@ -979,22 +1227,69 @@ class _InventoryScreenState extends State<InventoryScreen> {
               const SizedBox(height: 30),
 
               // BACKPACK INVENTORY SECTION
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.backpack, color: Colors.tealAccent, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    "BACKPACK INVENTORY (Tap to Inspect / Equip / Upgrade)",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.tealAccent,
-                      letterSpacing: 1,
+                  const Icon(
+                    Icons.backpack,
+                    color: Colors.tealAccent,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "BACKPACK (${widget.inventory.length}/$maxInventorySize)",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.tealAccent,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
+
+              // Sort buttons
+              if (widget.inventory.isNotEmpty)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: SortType.values.map((sort) {
+                      final isSelected = _currentSort == sort;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ChoiceChip(
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(sort.icon, size: 12),
+                              const SizedBox(width: 4),
+                              Text(sort.label),
+                            ],
+                          ),
+                          selected: isSelected,
+                          selectedColor: Colors.tealAccent.withValues(
+                            alpha: 0.2,
+                          ),
+                          backgroundColor: Colors.grey[900],
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Colors.tealAccent
+                                : Colors.white54,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          onSelected: (selected) {
+                            setState(() => _currentSort = sort);
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              const SizedBox(height: 8),
+
               if (widget.inventory.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -1013,44 +1308,45 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 )
               else
-                GridView.builder(
+                ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 2.8,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
                   itemCount: widget.inventory.length,
                   itemBuilder: (ctx, i) {
-                    final item = widget.inventory[i];
+                    final sortedIdx = _sortedIndices()[i];
+                    final item = widget.inventory[sortedIdx];
                     final sameCount = Item.countSameItem(
                       widget.inventory,
                       item,
                     );
+                    final itemColor = rarityColor(item.rarity);
                     return InkWell(
                       onTap: () {
                         setState(() {
-                          _selectedInventoryIndex = i;
+                          _selectedInventoryIndex = sortedIdx;
                           _selectedEquippedIndex = null;
                         });
-                        _showInspectDialog(item, isEquipped: false, index: i);
+                        _showInspectDialog(
+                          item,
+                          isEquipped: false,
+                          index: sortedIdx,
+                        );
                       },
                       child: Container(
+                        margin: const EdgeInsets.only(bottom: 6),
                         decoration: BoxDecoration(
                           color: Colors.grey[900],
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _selectedInventoryIndex == i
+                            color: _selectedInventoryIndex == sortedIdx
                                 ? Colors.tealAccent
-                                : Colors.grey[800]!,
+                                : itemColor.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                         ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
-                          vertical: 6,
+                          vertical: 8,
                         ),
                         child: Row(
                           children: [
@@ -1067,9 +1363,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 children: [
                                   Text(
                                     item.type.name.toUpperCase(),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 8,
-                                      color: Colors.teal,
+                                      color: itemColor.withValues(alpha: 0.7),
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1078,9 +1374,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       Expanded(
                                         child: Text(
                                           item.name,
-                                          style: const TextStyle(
-                                            fontSize: 11,
+                                          style: TextStyle(
+                                            fontSize: 12,
                                             fontWeight: FontWeight.bold,
+                                            color: itemColor,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1094,7 +1391,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       if (item.upgradeLevel > 0)
                                         Text(
                                           '+${item.upgradeLevel} ',
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 8,
                                             color: Colors.amberAccent,
                                             fontWeight: FontWeight.bold,
@@ -1104,10 +1401,50 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           item.type != SlotType.item)
                                         Text(
                                           '★$sameCount',
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 8,
                                             color: Colors.amberAccent,
                                             fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      // Show key stats
+                                      if (item.effectiveAttackBonus > 0)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 4,
+                                          ),
+                                          child: Text(
+                                            '⚔${item.effectiveAttackBonus}',
+                                            style: const TextStyle(
+                                              fontSize: 8,
+                                              color: Colors.redAccent,
+                                            ),
+                                          ),
+                                        ),
+                                      if (item.effectiveDamageReduction > 0)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 4,
+                                          ),
+                                          child: Text(
+                                            '🛡${item.effectiveDamageReduction}',
+                                            style: const TextStyle(
+                                              fontSize: 8,
+                                              color: Colors.cyanAccent,
+                                            ),
+                                          ),
+                                        ),
+                                      if (item.effectiveCritChance > 0)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 4,
+                                          ),
+                                          child: Text(
+                                            '⚡${(item.effectiveCritChance * 100).toInt()}%',
+                                            style: const TextStyle(
+                                              fontSize: 8,
+                                              color: Colors.amberAccent,
+                                            ),
                                           ),
                                         ),
                                       ...item.bonusDamage.entries
@@ -1119,7 +1456,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                               ),
                                               child: Text(
                                                 e.key.icon,
-                                                style: TextStyle(fontSize: 8),
+                                                style: const TextStyle(
+                                                  fontSize: 8,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1132,7 +1471,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                               ),
                                               child: Text(
                                                 e.key.icon,
-                                                style: TextStyle(fontSize: 8),
+                                                style: const TextStyle(
+                                                  fontSize: 8,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1140,6 +1481,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                   ),
                                 ],
                               ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right,
+                              color: Colors.white24,
+                              size: 18,
                             ),
                           ],
                         ),

@@ -16,8 +16,8 @@ class GameOverScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isTimeOut = hoursPassed >= 168;
-    final bool isVictory = player != null && player!.hp > 0 && !isTimeOut;
+    // Game over now only triggers on player death (the run is endless,
+    // a hyper boss appears every 7 days but never auto-fails the run).
     final int days = hoursPassed ~/ 24;
     final int hours = hoursPassed % 24;
 
@@ -34,34 +34,29 @@ class GameOverScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: (isVictory ? GameColors.success : GameColors.danger)
-                      .withValues(alpha: 0.1),
+                  color: GameColors.danger.withValues(alpha: 0.1),
                   boxShadow: [
                     BoxShadow(
-                      color:
-                          (isVictory ? GameColors.success : GameColors.danger)
-                              .withValues(alpha: 0.3),
+                      color: GameColors.danger.withValues(alpha: 0.3),
                       blurRadius: 30,
                       spreadRadius: 8,
                     ),
                   ],
                 ),
                 child: Icon(
-                  isVictory ? Icons.emoji_events : Icons.error_outline,
+                  Icons.error_outline,
                   size: 60,
-                  color: isVictory ? GameColors.success : GameColors.danger,
+                  color: GameColors.danger,
                 ),
               ),
               const SizedBox(height: 24),
 
               // ── Title ──
               Text(
-                isVictory
-                    ? "DATA INTEGRITY SECURED"
-                    : "RUN MATRIX DE-ALLOCATED",
+                "RUN MATRIX DE-ALLOCATED",
                 style: TextStyle(
                   fontSize: 24,
-                  color: isVictory ? GameColors.success : GameColors.danger,
+                  color: GameColors.danger,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 2,
                 ),
@@ -69,13 +64,9 @@ class GameOverScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                isVictory
-                    ? "Loop Survived Successfully"
-                    : (isTimeOut
-                          ? "Time Expired: Ring Collapsed"
-                          : "Expunged via Grid Defeat"),
+                "Expunged via Grid Defeat",
                 style: TextStyle(
-                  color: isVictory ? GameColors.success : GameColors.danger,
+                  color: GameColors.danger,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
