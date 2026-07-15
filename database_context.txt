@@ -1,6 +1,14 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+-- Auth users (managed by Supabase Auth)
+CREATE TABLE auth.users (
+  id uuid NOT NULL,
+  -- ... other auth fields
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+
+-- Public users profile (auto-created on signup via trigger)
 CREATE TABLE public.users (
   id uuid NOT NULL,
   username text,
@@ -9,18 +17,42 @@ CREATE TABLE public.users (
   CONSTRAINT users_pkey PRIMARY KEY (id),
   CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
+
+-- Game runs with full JSONB game state
 CREATE TABLE public.game_runs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   current_day integer DEFAULT 3,
   player_hp integer DEFAULT 60,
   player_max_hp integer DEFAULT 60,
+  player_gold integer DEFAULT 0,
   status text DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'won'::text, 'lost'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   current_zone text DEFAULT 'town'::text,
+  -- NEW columns for local-first save system
+  save_name text,
+  player_name text,
+  class_name text,
+  game_state jsonb,  -- Full serialized game state (items, inventory, effects, etc.)
+  last_synced_at timestamp with time zone,
   CONSTRAINT game_runs_pkey PRIMARY KEY (id),
   CONSTRAINT game_runs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
+
+-- Cloud save slots (for managing save metadata)
+CREATE TABLE public.player_saves (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  save_name text NOT NULL DEFAULT 'Untitled Save',
+  save_slot_index integer NOT NULL DEFAULT 0,
+  cloud_run_id uuid REFERENCES public.game_runs(id),
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  is_active boolean DEFAULT true,
+  UNIQUE(user_id, save_slot_index)
+);
+
+-- Legacy run_inventory (kept for backward compatibility, no longer actively used)
 CREATE TABLE public.run_inventory (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   run_id uuid NOT NULL,

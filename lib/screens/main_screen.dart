@@ -13,6 +13,10 @@ class MainScreen extends StatelessWidget {
   final ZoneType currentZone;
   final List<Item?> equippedSlots;
   final Function(String) onChangeScreen;
+  final Future<bool> Function()? onSave;
+  final Future<bool> Function()? onSyncCloud;
+  final int? saveSlot;
+  final VoidCallback? onQuitToTitle;
 
   const MainScreen({
     super.key,
@@ -21,6 +25,10 @@ class MainScreen extends StatelessWidget {
     required this.currentZone,
     required this.equippedSlots,
     required this.onChangeScreen,
+    this.onSave,
+    this.onSyncCloud,
+    this.saveSlot,
+    this.onQuitToTitle,
   });
 
   @override
@@ -117,24 +125,50 @@ class MainScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: GameColors.accent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              "ONGOING RUN",
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: GameColors.accent,
-                                letterSpacing: 0.8,
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: GameColors.accent.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  "ONGOING RUN",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: GameColors.accent,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              // ── MENU BUTTON ──
+                              GestureDetector(
+                                onTap: () => _showMainMenu(context),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: GameColors.surfaceLight,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: GameColors.border,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.menu_rounded,
+                                    color: Colors.white70,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -492,6 +526,231 @@ class MainScreen extends StatelessWidget {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MAIN MENU
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _showMainMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _MainMenuSheet(
+        player: player,
+        hasCloudSync: onSyncCloud != null,
+        hasSaveSlot: saveSlot != null,
+        onSave: onSave,
+        onSyncCloud: onSyncCloud,
+        onViewHelp: () => _showHelpPopup(context),
+        onViewAbout: () => _showAboutPopup(context),
+        onLoadSaveManager: () {
+          Navigator.pop(ctx);
+          onChangeScreen('save_manager');
+        },
+        onQuitToTitle: () {
+          Navigator.pop(ctx);
+          if (onQuitToTitle != null) {
+            onQuitToTitle!();
+          }
+        },
+        onChangeScreen: onChangeScreen,
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HELP POPUP
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _showHelpPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1D2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: GameColors.accent.withValues(alpha: 0.4)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.help_outline, color: GameColors.accent, size: 24),
+            const SizedBox(width: 10),
+            const Text(
+              'How to Play',
+              style: TextStyle(
+                color: GameColors.accent,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _helpSection(
+                '⚔️ Combat',
+                'Tap "Scout Adjacent Node" to explore. You\'ll encounter enemies, shops, events, and loot. Combat is auto-resolved each turn based on your stats.',
+              ),
+              _helpSection(
+                '🛡️ Equipment',
+                'Open "Matrix Configuration" to equip gear. Each class has a unique slot layout — match items to the right slot types for maximum power.',
+              ),
+              _helpSection(
+                '📊 Stats',
+                'ATK = damage per turn. DEF = flat damage reduction. CRIT = chance for 2× damage. LUCK boosts crit and drop rates.',
+              ),
+              _helpSection(
+                '🗺️ Zones',
+                'Different zones offer different encounters. Towns have shops and healing. The Citadel has a chance for boss fights.',
+              ),
+              _helpSection(
+                '💀 Bosses',
+                'Weekly bosses appear on days 2, 4, and 6. On day 7, a HYPER boss forces you into battle. Prepare well!',
+              ),
+              _helpSection(
+                '💾 Saving',
+                'Your game auto-saves. Use the menu (☰) to manually save or sync to the cloud.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CLOSE', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _helpSection(String title, String body) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            body,
+            style: const TextStyle(
+              color: Colors.white60,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ABOUT POPUP
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _showAboutPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1D2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: GameColors.primary.withValues(alpha: 0.4)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.info_outline, color: GameColors.primary, size: 24),
+            const SizedBox(width: 10),
+            const Text(
+              'About',
+              style: TextStyle(
+                color: GameColors.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Flutter Ring',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Version 1.0.0',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'A cyberpunk roguelike where you navigate corrupted data '
+              'zones, battle hostile constructs, and upgrade your gear '
+              'to survive the ever-growing threat of the Ring.',
+              style: TextStyle(
+                color: Colors.white60,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: GameColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: GameColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: const Text(
+                'Built with Flutter\n'
+                'Open Source on GitHub',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CLOSE', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STAT POPUPS (unchanged)
+  // ═══════════════════════════════════════════════════════════════════════════
+
   void _showStatPopup(
     BuildContext context,
     String icon,
@@ -768,6 +1027,309 @@ class MainScreen extends StatelessWidget {
           )
           .toList(),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN MENU BOTTOM SHEET
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _MainMenuSheet extends StatelessWidget {
+  final Character player;
+  final bool hasCloudSync;
+  final bool hasSaveSlot;
+  final Future<bool> Function()? onSave;
+  final Future<bool> Function()? onSyncCloud;
+  final VoidCallback onViewHelp;
+  final VoidCallback onViewAbout;
+  final VoidCallback onLoadSaveManager;
+  final VoidCallback onQuitToTitle;
+  final Function(String) onChangeScreen;
+
+  const _MainMenuSheet({
+    required this.player,
+    required this.hasCloudSync,
+    required this.hasSaveSlot,
+    this.onSave,
+    this.onSyncCloud,
+    required this.onViewHelp,
+    required this.onViewAbout,
+    required this.onLoadSaveManager,
+    required this.onQuitToTitle,
+    required this.onChangeScreen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1D2E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  GameImage(
+                    imagePath: player.imagePath,
+                    fallbackIcon: Icons.person,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          player.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          player.className,
+                          style: TextStyle(
+                            color: GameColors.primary.withValues(alpha: 0.8),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(color: Colors.white12, height: 1),
+
+            // Menu items
+            _buildMenuItem(
+              context,
+              icon: Icons.save_rounded,
+              label: 'Save Game',
+              subtitle: hasSaveSlot
+                  ? 'Slot ${(hasSaveSlot) ? '— check' : '—'}'
+                  : 'No slot',
+              color: GameColors.success,
+              onTap: () => _handleSave(context),
+            ),
+            if (hasCloudSync)
+              _buildMenuItem(
+                context,
+                icon: Icons.cloud_upload_rounded,
+                label: 'Cloud Sync',
+                subtitle: 'Upload save to cloud',
+                color: GameColors.accent,
+                onTap: () => _handleSync(context),
+              ),
+            _buildMenuItem(
+              context,
+              icon: Icons.folder_open_rounded,
+              label: 'Load / Save Manager',
+              subtitle: 'Switch saves or start new game',
+              color: GameColors.gold,
+              onTap: onLoadSaveManager,
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.inventory_2_rounded,
+              label: 'Inventory',
+              subtitle: 'Manage equipment and items',
+              color: GameColors.accent,
+              onTap: () {
+                Navigator.pop(context);
+                onChangeScreen('inventory');
+              },
+            ),
+
+            const Divider(color: Colors.white12, height: 1),
+
+            _buildMenuItem(
+              context,
+              icon: Icons.help_outline_rounded,
+              label: 'How to Play',
+              subtitle: 'Game tips and mechanics',
+              color: Colors.white70,
+              onTap: () {
+                Navigator.pop(context);
+                onViewHelp();
+              },
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.info_outline_rounded,
+              label: 'About',
+              subtitle: 'Flutter Ring v1.0.0',
+              color: Colors.white70,
+              onTap: () {
+                Navigator.pop(context);
+                onViewAbout();
+              },
+            ),
+
+            const Divider(color: Colors.white12, height: 1),
+
+            _buildMenuItem(
+              context,
+              icon: Icons.exit_to_app_rounded,
+              label: 'Quit to Title',
+              subtitle: 'Return to save manager',
+              color: GameColors.danger,
+              onTap: onQuitToTitle,
+            ),
+
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white.withValues(alpha: 0.2),
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSave(BuildContext context) async {
+    if (onSave == null) return;
+    Navigator.pop(context);
+
+    final scaffold = ScaffoldMessenger.of(context);
+    final success = await onSave!();
+
+    if (!context.mounted) return;
+
+    if (success) {
+      scaffold.showSnackBar(
+        SnackBar(
+          content: const Text('Game saved successfully'),
+          backgroundColor: GameColors.success,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } else {
+      scaffold.showSnackBar(
+        SnackBar(
+          content: const Text('Failed to save game'),
+          backgroundColor: GameColors.danger,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleSync(BuildContext context) async {
+    if (onSyncCloud == null) return;
+    Navigator.pop(context);
+
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(
+      const SnackBar(
+        content: Text('Syncing to cloud...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    final success = await onSyncCloud!();
+
+    if (!context.mounted) return;
+
+    if (success) {
+      scaffold.showSnackBar(
+        SnackBar(
+          content: const Text('Cloud sync complete'),
+          backgroundColor: GameColors.success,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } else {
+      scaffold.showSnackBar(
+        SnackBar(
+          content: const Text('Cloud sync failed'),
+          backgroundColor: GameColors.danger,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 }
 

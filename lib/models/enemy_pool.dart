@@ -489,6 +489,42 @@ class EnemyPool {
         }
         pool = graveyardEnemies;
         break;
+      // New tier zones use appropriate enemy pools
+      case ZoneType.ironHarbor:
+      case ZoneType.chromeSpire:
+      case ZoneType.neonOasis:
+      case ZoneType.blackMarketHub:
+      case ZoneType.skyDock:
+        pool = standardEnemies;
+        break;
+      case ZoneType.scorchedPipeline:
+      case ZoneType.rustCanyon:
+      case ZoneType.decayedGrid:
+      case ZoneType.shatteredCore:
+        pool = wastelandEnemies;
+        break;
+      case ZoneType.dataTorrent:
+        pool = forestEnemies;
+        break;
+      case ZoneType.forgottenServer:
+      case ZoneType.hollowNetwork:
+      case ZoneType.deadSignal:
+        pool = deepCavesEnemies;
+        break;
+      case ZoneType.acidSprawl:
+      case ZoneType.staticRift:
+        pool = forestEnemies;
+        break;
+      case ZoneType.entropyWell:
+      case ZoneType.chromeLabyrinth:
+      case ZoneType.voidNexus:
+      case ZoneType.deepSpire:
+      case ZoneType.quantumSea:
+        if (_random.nextDouble() < 0.4) {
+          return getRandomBossEnemy();
+        }
+        pool = graveyardEnemies;
+        break;
     }
     return pool[_random.nextInt(pool.length)].clone();
   }

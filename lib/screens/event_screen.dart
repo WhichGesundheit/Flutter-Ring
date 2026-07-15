@@ -9,6 +9,10 @@ class EventScreen extends StatefulWidget {
   final RandomEvent event;
   final int playerCredits;
   final int playerHp;
+  final int playerMaxHp;
+  final int playerAttack;
+  final int playerDefense;
+  final int playerLuck;
   final List<Item> playerInventory;
   final int maxInventory;
 
@@ -21,6 +25,10 @@ class EventScreen extends StatefulWidget {
     required this.event,
     required this.playerCredits,
     required this.playerHp,
+    this.playerMaxHp = 100,
+    this.playerAttack = 5,
+    this.playerDefense = 0,
+    this.playerLuck = 0,
     required this.playerInventory,
     required this.maxInventory,
     required this.onComplete,
@@ -51,7 +59,7 @@ class EventResult {
 class _EventScreenState extends State<EventScreen>
     with SingleTickerProviderStateMixin {
   bool _showingResult = false;
-  EventOutcome? _selectedOutcome;
+  DiceRollResult? _diceResult;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
@@ -66,7 +74,6 @@ class _EventScreenState extends State<EventScreen>
       parent: _animController,
       curve: Curves.easeInOut,
     );
-    // Start fade-in animation immediately so the event screen is visible
     _animController.forward();
   }
 
@@ -76,21 +83,27 @@ class _EventScreenState extends State<EventScreen>
     super.dispose();
   }
 
+  Map<StatType, int> get _playerStats => {
+    StatType.attack: widget.playerAttack,
+    StatType.luck: widget.playerLuck,
+    StatType.defense: widget.playerDefense,
+    StatType.hp: widget.playerHp,
+  };
+
   void _onChoiceSelected(EventChoice choice) {
-    final outcome = EventPool.resolveChoice(choice);
+    final result = EventPool.resolveChoice(choice, _playerStats);
     setState(() {
-      _selectedOutcome = outcome;
+      _diceResult = result;
       _showingResult = true;
     });
-    // Reset and replay the fade-in animation for the result view
     _animController.reset();
     _animController.forward();
   }
 
   void _onContinue() {
-    if (_selectedOutcome == null) return;
+    if (_diceResult == null) return;
 
-    // Calculate results
+    final outcome = _diceResult!.outcome;
     int goldChange = 0;
     int hpChange = 0;
     List<Item> itemsGained = [];
@@ -98,7 +111,7 @@ class _EventScreenState extends State<EventScreen>
     int statBoost = 0;
     String? statDescription;
 
-    for (final effect in _selectedOutcome!.effects) {
+    for (final effect in outcome.effects) {
       switch (effect.type) {
         case EventEffectType.goldChange:
           goldChange += effect.value;
@@ -112,7 +125,6 @@ class _EventScreenState extends State<EventScreen>
           }
           break;
         case EventEffectType.itemGain:
-          // Generate a random item for the player
           final pool = Item.chestLootPool;
           itemsGained.add(
             pool[DateTime.now().millisecondsSinceEpoch % pool.length],
@@ -179,9 +191,11 @@ class _EventScreenState extends State<EventScreen>
                   size: 18,
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'RANDOM EVENT',
-                  style: TextStyle(
+                Text(
+                  widget.event.id.startsWith('camp_')
+                      ? 'CAMP EVENT'
+                      : 'RANDOM EVENT',
+                  style: const TextStyle(
                     color: Colors.amberAccent,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -245,33 +259,11 @@ class _EventScreenState extends State<EventScreen>
           ),
           const SizedBox(height: 16),
 
-          // Choice buttons
+          // Choice buttons with stat check info
           ...widget.event.choices.map(
             (choice) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: GameColors.surface,
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: GameColors.primary.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: () => _onChoiceSelected(choice),
-                  child: Text(
-                    choice.text,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
+              child: _buildChoiceButton(choice),
             ),
           ),
         ],
@@ -279,15 +271,39 @@ class _EventScreenState extends State<EventScreen>
     );
   }
 
+  Widget _buildChoiceButton(EventChoice choice) {
+    return SizedBox(
+      height: 48,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: GameColors.surface,
+          foregroundColor: Colors.white,
+          side: BorderSide(color: GameColors.primary.withValues(alpha: 0.5)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        onPressed: () => _onChoiceSelected(choice),
+        child: Text(
+          choice.text,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
   Widget _buildResultView() {
-    if (_selectedOutcome == null) return const SizedBox.shrink();
+    if (_diceResult == null) return const SizedBox.shrink();
+
+    final result = _diceResult!;
+    final outcome = result.outcome;
 
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Result header
+          // Dice roll header
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -295,23 +311,55 @@ class _EventScreenState extends State<EventScreen>
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: GameColors.border),
             ),
-            child: Row(
+            child: Column(
               children: [
-                const Icon(
-                  Icons.receipt_long,
-                  color: Colors.cyanAccent,
-                  size: 18,
+                Row(
+                  children: [
+                    Icon(
+                      result.passed ? Icons.check_circle : Icons.cancel,
+                      color: result.passed
+                          ? Colors.greenAccent
+                          : Colors.redAccent,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      result.passed ? 'CHECK PASSED' : 'CHECK FAILED',
+                      style: TextStyle(
+                        color: result.passed
+                            ? Colors.greenAccent
+                            : Colors.redAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  'EVENT RESULT',
-                  style: TextStyle(
-                    color: Colors.cyanAccent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
+                if (result.dc > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '🎲 d20(${result.d20}) + ${result.statLabel}(${result.statModifier >= 0 ? '+' : ''}${result.statModifier}) + LCK(${result.luckModifier >= 0 ? '+' : ''}${result.luckModifier}) = ${result.totalRoll} vs DC ${result.dc}',
+                      style: TextStyle(
+                        color: result.passed
+                            ? Colors.greenAccent
+                            : Colors.redAccent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -320,7 +368,7 @@ class _EventScreenState extends State<EventScreen>
           // Result art
           Center(
             child: Text(
-              _selectedOutcome!.resultArt,
+              outcome.resultArt,
               style: const TextStyle(fontSize: 72),
             ),
           ),
@@ -328,7 +376,7 @@ class _EventScreenState extends State<EventScreen>
 
           // Result title
           Text(
-            _selectedOutcome!.resultTitle.toUpperCase(),
+            outcome.resultTitle.toUpperCase(),
             style: TextStyle(
               color: _getResultColor(),
               fontSize: 20,
@@ -351,7 +399,7 @@ class _EventScreenState extends State<EventScreen>
                 ),
               ),
               child: Text(
-                _selectedOutcome!.resultDescription,
+                outcome.resultDescription,
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 14,
@@ -395,7 +443,7 @@ class _EventScreenState extends State<EventScreen>
   }
 
   Widget _buildEffectsSummary() {
-    final effects = _selectedOutcome!.effects;
+    final effects = _diceResult!.outcome.effects;
     if (effects.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -470,14 +518,14 @@ class _EventScreenState extends State<EventScreen>
   }
 
   Color _getResultColor() {
-    if (_selectedOutcome == null) return Colors.white;
-    final hasNegative = _selectedOutcome!.effects.any(
+    if (_diceResult == null) return Colors.white;
+    final hasNegative = _diceResult!.outcome.effects.any(
       (e) =>
           (e.type == EventEffectType.hpChange && e.value < 0) ||
           (e.type == EventEffectType.goldChange && e.value < 0) ||
           (e.type == EventEffectType.statusApply),
     );
-    final hasPositive = _selectedOutcome!.effects.any(
+    final hasPositive = _diceResult!.outcome.effects.any(
       (e) =>
           (e.type == EventEffectType.hpChange && e.value > 0) ||
           (e.type == EventEffectType.goldChange && e.value > 0) ||

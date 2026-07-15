@@ -336,6 +336,65 @@ class Item {
     return inventory.where((i) => i.id == item.id).length;
   }
 
+  /// Serialize to JSON
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type.name,
+    'description': description,
+    'cost': cost,
+    'attackBonus': attackBonus,
+    'damageReduction': damageReduction,
+    'lifeSteal': lifeSteal,
+    'thorns': thorns,
+    'critChance': critChance,
+    'healAmount': healAmount,
+    'hpThreshold': hpThreshold,
+    'imagePath': imagePath,
+    'rarity': rarity.name,
+    'luckBonus': luckBonus,
+    'bonusDamage': bonusDamage.map((k, v) => MapEntry(k.name, v)),
+    'flatResistance': flatResistance.map((k, v) => MapEntry(k.name, v)),
+    'upgradeLevel': upgradeLevel,
+  };
+
+  /// Deserialize from JSON
+  factory Item.fromJson(Map<String, dynamic> json) {
+    final bonusDamageMap = <DamageType, int>{};
+    if (json['bonusDamage'] != null) {
+      (json['bonusDamage'] as Map).forEach((key, value) {
+        bonusDamageMap[DamageType.values.byName(key as String)] = value as int;
+      });
+    }
+    final flatResistanceMap = <DamageType, int>{};
+    if (json['flatResistance'] != null) {
+      (json['flatResistance'] as Map).forEach((key, value) {
+        flatResistanceMap[DamageType.values.byName(key as String)] =
+            value as int;
+      });
+    }
+    return Item(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      type: SlotType.values.byName(json['type'] as String),
+      description: json['description'] as String? ?? '',
+      cost: json['cost'] as int? ?? 0,
+      attackBonus: json['attackBonus'] as int? ?? 0,
+      damageReduction: json['damageReduction'] as int? ?? 0,
+      lifeSteal: json['lifeSteal'] as int? ?? 0,
+      thorns: json['thorns'] as int? ?? 0,
+      critChance: (json['critChance'] as num?)?.toDouble() ?? 0.0,
+      healAmount: json['healAmount'] as int? ?? 0,
+      hpThreshold: (json['hpThreshold'] as num?)?.toDouble() ?? 0.0,
+      imagePath: json['imagePath'] as String?,
+      rarity: Rarity.values.byName(json['rarity'] as String? ?? 'common'),
+      luckBonus: json['luckBonus'] as int? ?? 0,
+      bonusDamage: bonusDamageMap,
+      flatResistance: flatResistanceMap,
+      upgradeLevel: json['upgradeLevel'] as int? ?? 0,
+    );
+  }
+
   /// Attempt to roll a drop from [pool]. Returns null if nothing drops.
   /// [luckModifier] is added to the base drop chance (e.g. 0.05 = +5%).
   static Item? rollDrop(

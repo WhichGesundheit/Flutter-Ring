@@ -15,10 +15,17 @@ import 'models/merchant.dart';
 import 'models/zone.dart';
 import 'models/npc.dart';
 import 'models/random_event.dart';
+import 'models/camp_event.dart';
 import 'models/status_effect.dart';
 
+// Import Services
+import 'services/save_file_manager.dart';
+import 'services/cloud_sync_service.dart';
+import 'services/auth_service.dart';
+
 // Import Screens
-import 'screens/start_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/save_manager_screen.dart';
 import 'screens/character_select_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/travel_screen.dart';
@@ -86,7 +93,7 @@ class GameController extends StatefulWidget {
 
 class _GameControllerState extends State<GameController> {
   final supabase = Supabase.instance.client;
-  String _currentScreen = 'start';
+  String _currentScreen = 'login';
   Character? player;
   String? currentRunId;
   int hoursPassed = 0;
@@ -99,7 +106,6 @@ class _GameControllerState extends State<GameController> {
   Enemy? activeEnemy;
   List<Item> shopItems = [];
   Item? foundLoot;
-  String? _detectedGoldColumn;
   BossEncounterTracker bossTracker = BossEncounterTracker();
   MerchantManager merchantManager = MerchantManager();
   NPCManager npcManager = NPCManager();
@@ -108,27 +114,52 @@ class _GameControllerState extends State<GameController> {
   RandomEvent? _pendingEvent;
 
   // ── Hyper-boss state ──
-  /// Last day on which the hyper boss for that week was triggered.
-  /// -1 means "never".
   int lastHyperBossDay = -1;
-
-  /// When a hyper boss is queued and the player must immediately fight it.
   bool _hyperBossQueued = false;
 
   // ── Shop refresh state ──
-  /// In-game hour at which the cached shop stock was last (re)generated.
   int lastShopRefreshHour = -1000;
 
   // ── Merchant rotation state ──
-  /// In-game hour at which traveling merchants were last rotated.
   int lastMerchantRotationHour = -1000;
+
+  // ── New Services ──
+  final SaveFileManager _saveManager = SaveFileManager();
+  late CloudSyncService _cloudSync;
+  late AuthService _authService;
+
+  // ── Current save state ──
+  int? _currentSaveSlot;
+  String _saveName = 'Untitled Save';
+
+  @override
+  void initState() {
+    super.initState();
+    _cloudSync = CloudSyncService(
+      supabase: supabase,
+      saveManager: _saveManager,
+    );
+    _authService = AuthService(supabase: supabase);
+    _checkExistingSession();
+  }
+
+  /// Check if user has an existing auth session
+  void _checkExistingSession() {
+    final user = _authService.currentUser;
+    if (user != null) {
+      // Logged in user - go to save manager
+      _currentScreen = 'save_manager';
+    } else {
+      // No session - show login
+      _currentScreen = 'login';
+    }
+  }
 
   void changeScreen(String screenName) {
     setState(() => _currentScreen = screenName);
   }
 
   /// Auto-equip items from a list of drops if matching empty slots exist.
-  /// Returns the list of items that could NOT be auto-equipped (still in drops).
   List<Item> _autoEquipDrops(List<Item> drops) {
     final List<Item> remaining = [];
     for (final item in drops) {
@@ -164,15 +195,12 @@ class _GameControllerState extends State<GameController> {
     return shopItems;
   }
 
-  /// Called after any `hoursPassed` change. If the player just rolled over
-  /// to a multiple-of-7 day (7, 14, 21, …) and the hyper boss for that
-  /// week hasn't been engaged yet, force the player into battle with it.
+  /// Called after any `hoursPassed` change. Check for hyper boss.
   void _checkForHyperBoss() {
     final currentDay = hoursPassed ~/ 24;
     if (currentDay <= 0) return;
     if (currentDay % 7 != 0) return;
     if (currentDay == lastHyperBossDay) return;
-    // Already in battle – don't override.
     if (_currentScreen == 'battle') return;
 
     lastHyperBossDay = currentDay;
@@ -187,33 +215,28 @@ class _GameControllerState extends State<GameController> {
   void mapsToZone(ZoneType targetZone) {
     setState(() {
       currentZone = targetZone;
-      hoursPassed += 2; // travel now costs 2h
+      hoursPassed += 2;
     });
     merchantManager.rotateLocationsIfDue(hoursPassed);
     npcManager.rotateLocationsIfDue(hoursPassed);
 
-    // Process status effect hourly ticks
     if (player != null) {
       player!.tickHourEffects();
       player!.processHourlyEffects();
       player!.removeExpiredEffects();
     }
 
-    // Check if player died from status effects during travel
     if (player != null && player!.hp <= 0) {
       player!.hp = 0;
-      syncPlayerStateToCloud();
+      _autoSave();
       changeScreen('game_over');
       return;
     }
 
-    // Roll for random event during travel (skip if destination is a settlement)
     _rollForRandomEvent(destinationZone: targetZone);
-
-    syncPlayerStateToCloud();
+    _autoSave();
     _checkForHyperBoss();
 
-    // Show pending random event if one was rolled
     if (_pendingEvent != null) {
       changeScreen('event');
     }
@@ -221,7 +244,6 @@ class _GameControllerState extends State<GameController> {
 
   void _rollForRandomEvent({ZoneType? destinationZone}) {
     if (player == null) return;
-    // Don't trigger events when traveling to settlements (town, ruins, citadel)
     if (destinationZone != null) {
       final destData = Zone.worldMap[destinationZone];
       if (destData != null && destData.isSettlement) return;
@@ -238,19 +260,191 @@ class _GameControllerState extends State<GameController> {
     }
   }
 
-  /// Check if there's a pending event to show
   RandomEvent? get pendingEvent => _pendingEvent;
 
-  /// Consume the pending event (set to null after showing)
   void consumePendingEvent() {
     _pendingEvent = null;
   }
 
-  void _initLocalRun(Character chosenChar) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SAVE SYSTEM – Local-first with optional cloud sync
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Build SaveData from current game state
+  SaveData _buildSaveData({String? name}) {
+    final now = DateTime.now();
+    return SaveData(
+      id: currentRunId ?? 'local_run_${now.millisecondsSinceEpoch}',
+      saveName: name ?? _saveName,
+      createdAt: now,
+      updatedAt: now,
+      status: (player?.hp ?? 0) <= 0 ? 'lost' : 'active',
+      playerName: player?.name ?? 'Unknown',
+      className: player?.className ?? 'Unknown',
+      imagePath: player?.imagePath,
+      hp: player?.hp ?? 0,
+      maxHp: player?.maxHp ?? 0,
+      baseAttack: player?.baseAttack ?? 0,
+      credits: player?.credits ?? 0,
+      hoursPassed: hoursPassed,
+      currentZone: currentZone.name,
+      equippedSlots: equippedSlots,
+      inventory: inventory,
+      slotLayout: player?.slotLayout.map((s) => s.name).toList() ?? [],
+      lastHyperBossDay: lastHyperBossDay,
+      lastShopRefreshHour: lastShopRefreshHour,
+      lastMerchantRotationHour: lastMerchantRotationHour,
+      bossDefeatedDays: bossTracker.defeatedBosses.toList(),
+      activeStatusEffects: player?.activeStatusEffects ?? [],
+      cloudRunId: currentRunId?.startsWith('local_') == true
+          ? null
+          : currentRunId,
+      syncStatus: _authService.isLoggedIn ? 'pending_sync' : 'local_only',
+    );
+  }
+
+  /// Load game state from SaveData
+  void _loadFromSaveData(SaveData data, int slot) {
+    final slotTypes = data.slotLayout
+        .map((s) => SlotType.values.byName(s))
+        .toList();
+
+    // Find the first non-null equipped item as starting item reference
+    Item startingRef = Item(id: 'none', name: 'None', type: SlotType.item);
+    for (final item in data.equippedSlots) {
+      if (item != null) {
+        startingRef = item;
+        break;
+      }
+    }
+
+    // Resolve imagePath: prefer saved value, fallback to name-based lookup
+    final resolvedImagePath =
+        data.imagePath ?? _imagePathForName(data.playerName);
+
+    setState(() {
+      _currentSaveSlot = slot;
+      _saveName = data.saveName;
+      currentRunId = data.id;
+      hoursPassed = data.hoursPassed;
+      currentZone = ZoneType.values.byName(data.currentZone);
+
+      player = Character(
+        name: data.playerName,
+        className: data.className,
+        hp: data.hp,
+        maxHp: data.maxHp,
+        baseAttack: data.baseAttack,
+        credits: data.credits,
+        startingItem: startingRef,
+        slotLayout: slotTypes,
+        imagePath: resolvedImagePath,
+        activeStatusEffects: data.activeStatusEffects,
+      );
+
+      equippedSlots = List<Item?>.from(data.equippedSlots);
+      inventory = List<Item>.from(data.inventory);
+      lastHyperBossDay = data.lastHyperBossDay;
+      lastShopRefreshHour = data.lastShopRefreshHour;
+      lastMerchantRotationHour = data.lastMerchantRotationHour;
+      bossTracker = BossEncounterTracker();
+      for (final day in data.bossDefeatedDays) {
+        bossTracker.markDefeated(day);
+      }
+      merchantManager = MerchantManager();
+      npcManager = NPCManager();
+      _pendingEvent = null;
+      _hyperBossQueued = false;
+      shopItems = [];
+    });
+  }
+
+  /// Auto-save to current slot (called on key game actions)
+  Future<void> _autoSave() async {
+    if (_currentSaveSlot == null) return;
+    final data = _buildSaveData();
+    await _saveManager.saveToSlot(_currentSaveSlot!, data);
+  }
+
+  /// Manual save (from main screen menu). Returns true on success.
+  Future<bool> _manualSave() async {
+    final data = _buildSaveData();
+    if (_currentSaveSlot != null) {
+      try {
+        await _saveManager.saveToSlot(_currentSaveSlot!, data);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// Fallback: map a character name to its known image asset path.
+  static String? _imagePathForName(String name) {
+    const map = {
+      'Valerie': 'assets/images/characters/valerie.png',
+      'Aethelgard': 'assets/images/characters/aethelgard.png',
+      'Vex': 'assets/images/characters/vex.png',
+      'Bulwark': 'assets/images/characters/bulwark.png',
+    };
+    return map[name];
+  }
+
+  /// Save to a new slot
+  Future<void> _saveToNewSlot(int slot, String name) async {
+    _currentSaveSlot = slot;
+    _saveName = name;
+    final data = _buildSaveData(name: name);
+    await _saveManager.saveToSlot(slot, data);
+  }
+
+  /// Sync current save to cloud. Returns true on success.
+  Future<bool> _syncToCloud() async {
+    if (!_authService.isLoggedIn || _currentSaveSlot == null) return false;
+    final data = _buildSaveData();
+    return await _cloudSync.syncToCloudWithSlot(_currentSaveSlot!, data);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCREEN FLOW HANDLERS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _handleAuthenticated() {
+    changeScreen('save_manager');
+  }
+
+  void _handleGuestPlay() {
+    _authService.playAsGuest();
+    changeScreen('save_manager');
+  }
+
+  void _handleLoadSave(int slot) async {
+    final data = await _saveManager.loadFromSlot(slot);
+    if (data == null) {
+      // No save in this slot, start new game
+      _currentSaveSlot = slot;
+      _saveName = 'Save ${slot + 1}';
+      changeScreen('character_select');
+      return;
+    }
+    _loadFromSaveData(data, slot);
+    changeScreen('main');
+  }
+
+  void _handleNewGame() {
+    changeScreen('character_select');
+  }
+
+  void _handleStartNewRun(Character chosenChar) {
+    final slot = _currentSaveSlot ?? 0;
+    _saveName = chosenChar.name;
+
     int startingSlotIdx = max(
       0,
       chosenChar.slotLayout.indexOf(chosenChar.startingItem.type),
     );
+
     setState(() {
       player = chosenChar;
       currentRunId = 'local_run_${DateTime.now().millisecondsSinceEpoch}';
@@ -265,174 +459,34 @@ class _GameControllerState extends State<GameController> {
       lastShopRefreshHour = -1000;
       lastMerchantRotationHour = -1000;
       shopItems = [];
-      changeScreen('main');
     });
+
+    // Save to the selected slot
+    _saveToNewSlot(slot, _saveName);
+    changeScreen('main');
   }
 
-  // --- SUPABASE ENGINE ACTIONS ---
-  Future<void> startNewRunInCloud(Character chosenChar) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
-      _initLocalRun(chosenChar);
-      return;
-    }
-    try {
-      Map<String, dynamic> payload = {
-        'user_id': user.id,
-        'current_day': hoursPassed ~/ 24,
-        'player_hp': chosenChar.hp,
-        'player_max_hp': chosenChar.maxHp,
-        'status': 'active',
-        'current_zone': currentZone.name,
-      };
-
-      dynamic runData;
-      try {
-        final testPayload = Map<String, dynamic>.from(payload)
-          ..['player_gold'] = chosenChar.credits;
-        runData = await supabase
-            .from('game_runs')
-            .insert(testPayload)
-            .select()
-            .single();
-        _detectedGoldColumn = 'player_gold';
-      } catch (e) {
-        debugPrint("Failed with player_gold: $e. Trying with gold...");
-        try {
-          final testPayload = Map<String, dynamic>.from(payload)
-            ..['gold'] = chosenChar.credits;
-          runData = await supabase
-              .from('game_runs')
-              .insert(testPayload)
-              .select()
-              .single();
-          _detectedGoldColumn = 'gold';
-        } catch (e2) {
-          debugPrint("Failed with gold: $e2. Trying without gold column...");
-          runData = await supabase
-              .from('game_runs')
-              .insert(payload)
-              .select()
-              .single();
-          _detectedGoldColumn = 'none';
-        }
-      }
-
-      final String runId = runData['id'];
-      int startingSlotIdx = max(
-        0,
-        chosenChar.slotLayout.indexOf(chosenChar.startingItem.type),
-      );
-
-      await supabase.from('run_inventory').insert({
-        'run_id': runId,
-        'item_id': chosenChar.startingItem.id,
-        'slot_position': startingSlotIdx,
-      });
-
-      setState(() {
-        player = chosenChar;
-        currentRunId = runId;
-        equippedSlots = List.filled(chosenChar.slotLayout.length, null);
-        equippedSlots[startingSlotIdx] = chosenChar.startingItem;
-        lastHyperBossDay = -1;
-        _hyperBossQueued = false;
-        lastShopRefreshHour = -1000;
-        lastMerchantRotationHour = -1000;
-        shopItems = [];
-        changeScreen('main');
-      });
-    } catch (e) {
-      debugPrint("Cloud Sync Error in startNewRun: $e");
-      _initLocalRun(chosenChar);
-    }
-  }
-
-  Future<void> syncPlayerStateToCloud() async {
-    if (currentRunId == null ||
-        player == null ||
-        currentRunId!.startsWith('local_run_')) {
-      return;
-    }
-    try {
-      Map<String, dynamic> payload = {
-        'player_hp': player!.hp,
-        'current_day': hoursPassed ~/ 24,
-        'status': (player!.hp <= 0) ? 'lost' : 'active',
-        'current_zone': currentZone.name,
-      };
-
-      if (_detectedGoldColumn == 'player_gold') {
-        payload['player_gold'] = player!.credits;
-      } else if (_detectedGoldColumn == 'gold') {
-        payload['gold'] = player!.credits;
-      } else if (_detectedGoldColumn == null) {
-        try {
-          final probePayload = Map<String, dynamic>.from(payload)
-            ..['player_gold'] = player!.credits;
-          await supabase
-              .from('game_runs')
-              .update(probePayload)
-              .eq('id', currentRunId!);
-          _detectedGoldColumn = 'player_gold';
-          return;
-        } catch (_) {
-          try {
-            final probePayload = Map<String, dynamic>.from(payload)
-              ..['gold'] = player!.credits;
-            await supabase
-                .from('game_runs')
-                .update(probePayload)
-                .eq('id', currentRunId!);
-            _detectedGoldColumn = 'gold';
-            return;
-          } catch (_) {
-            _detectedGoldColumn = 'none';
-          }
-        }
-      }
-
-      await supabase.from('game_runs').update(payload).eq('id', currentRunId!);
-    } catch (e) {
-      debugPrint("Error syncing player state: $e");
-    }
-  }
-
-  Future<void> syncInventoryToCloud() async {
-    if (currentRunId == null || currentRunId!.startsWith('local_run_')) return;
-
-    await supabase.from('run_inventory').delete().eq('run_id', currentRunId!);
-    List<Map<String, dynamic>> payload = [];
-
-    for (int i = 0; i < equippedSlots.length; i++) {
-      if (equippedSlots[i] != null) {
-        payload.add({
-          'run_id': currentRunId,
-          'item_id': equippedSlots[i]!.id,
-          'slot_position': i,
-        });
-      }
-    }
-    for (int i = 0; i < inventory.length; i++) {
-      payload.add({
-        'run_id': currentRunId,
-        'item_id': inventory[i].id,
-        'slot_position': 20 + i,
-      });
-    }
-
-    if (payload.isNotEmpty) {
-      await supabase.from('run_inventory').insert(payload);
-    }
-  }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
     switch (_currentScreen) {
-      case 'start':
-        return StartScreen(onStart: () => changeScreen('character_select'));
+      case 'login':
+        return LoginScreen(
+          onAuthenticated: _handleAuthenticated,
+          onGuestPlay: _handleGuestPlay,
+        );
+      case 'save_manager':
+        return SaveManagerScreen(
+          onLoadSave: _handleLoadSave,
+          onNewGame: _handleNewGame,
+          showBackButton: _authService.isLoggedIn,
+          onBack: () => changeScreen('login'),
+        );
       case 'character_select':
-        return CharacterSelectScreen(onSelect: startNewRunInCloud);
+        return CharacterSelectScreen(onSelect: _handleStartNewRun);
       case 'main':
         return MainScreen(
           player: player!,
@@ -440,6 +494,13 @@ class _GameControllerState extends State<GameController> {
           currentZone: currentZone,
           equippedSlots: equippedSlots,
           onChangeScreen: changeScreen,
+          onSave: _manualSave,
+          onSyncCloud: _authService.isLoggedIn ? _syncToCloud : null,
+          saveSlot: _currentSaveSlot,
+          onQuitToTitle: () {
+            _autoSave();
+            changeScreen('save_manager');
+          },
         );
       case 'travel':
         return TravelScreen(
@@ -457,8 +518,6 @@ class _GameControllerState extends State<GameController> {
                 activeEnemy = data;
                 changeScreen('battle');
               } else if (type == 'Shop') {
-                // Settlement shop: refresh only every 24h, otherwise
-                // re-use the cached stock.
                 shopItems = _getOrRefreshShopStock();
                 changeScreen('shop');
               } else if (type == 'Gleed') {
@@ -467,21 +526,26 @@ class _GameControllerState extends State<GameController> {
                 foundLoot = data;
                 changeScreen('loot');
               } else if (type == 'BuyItem') {
-                // Directly add purchased item to inventory
                 if (inventory.length < maxInventorySize) {
                   inventory.add(data);
                 }
               } else if (type == 'Heal') {
                 player!.hp = player!.maxHp;
               } else if (type == 'Empty') {
-                // Roll for random event during local exploration
                 _rollForRandomEvent();
+              } else if (type == 'Camp') {
+                // Camping: trigger a camp event (100% chance)
+                _pendingEvent = CampEventPool.getRandomCampEvent();
+                // Process hour-based effects for camping time
+                for (int i = 0; i < cost; i++) {
+                  player!.tickHourEffects();
+                  player!.processHourlyEffects();
+                  player!.removeExpiredEffects();
+                }
               }
             });
-            syncPlayerStateToCloud();
-            // Check for hyper boss after every time advance.
+            _autoSave();
             _checkForHyperBoss();
-            // Show pending random event if one was rolled
             if (_pendingEvent != null) {
               changeScreen('event');
             }
@@ -496,18 +560,15 @@ class _GameControllerState extends State<GameController> {
           isHyperBoss: _hyperBossQueued,
           onEnd: (won, drops) {
             setState(() {
-              hoursPassed += 1; // Battle now costs 1h
+              hoursPassed += 1;
               _hyperBossQueued = false;
               if (won) {
-                // Track weekly boss defeat (regular or hyper)
                 if (activeEnemy!.isBoss) {
                   final currentDay = hoursPassed ~/ 24;
                   bossTracker.markDefeated(currentDay);
                 }
                 if (drops.isNotEmpty) {
-                  // Auto-equip drops into empty matching slots
                   final remaining = _autoEquipDrops(drops);
-                  // Add remaining to inventory (respect limit)
                   for (final item in remaining) {
                     if (inventory.length < maxInventorySize) {
                       inventory.add(item);
@@ -516,8 +577,7 @@ class _GameControllerState extends State<GameController> {
                 }
               }
             });
-            syncInventoryToCloud();
-            syncPlayerStateToCloud();
+            _autoSave();
             if (!won) {
               changeScreen('game_over');
             } else {
@@ -532,8 +592,7 @@ class _GameControllerState extends State<GameController> {
           equippedSlots: equippedSlots,
           currentZone: currentZone,
           onBack: () {
-            syncInventoryToCloud();
-            syncPlayerStateToCloud();
+            _autoSave();
             changeScreen('main');
           },
         );
@@ -543,8 +602,7 @@ class _GameControllerState extends State<GameController> {
           items: shopItems,
           inventory: inventory,
           onExit: () {
-            syncPlayerStateToCloud();
-            syncInventoryToCloud();
+            _autoSave();
             changeScreen('main');
           },
         );
@@ -554,8 +612,7 @@ class _GameControllerState extends State<GameController> {
           inventory: inventory,
           maxInventory: maxInventorySize,
           onExit: () {
-            syncPlayerStateToCloud();
-            syncInventoryToCloud();
+            _autoSave();
             changeScreen('main');
           },
           onCureStatus: () {
@@ -571,7 +628,6 @@ class _GameControllerState extends State<GameController> {
           maxInventory: maxInventorySize,
           onExtract: () {
             setState(() {
-              // Auto-equip if matching empty slot exists
               bool equipped = false;
               for (int i = 0; i < player!.slotLayout.length; i++) {
                 if (player!.slotLayout[i] == foundLoot!.type &&
@@ -585,14 +641,14 @@ class _GameControllerState extends State<GameController> {
                 inventory.add(foundLoot!);
               }
             });
-            syncInventoryToCloud();
+            _autoSave();
             changeScreen('main');
           },
           onScrap: () {
             setState(() {
               player!.credits += foundLoot!.sellValue;
             });
-            syncPlayerStateToCloud();
+            _autoSave();
             changeScreen('main');
           },
         );
@@ -601,28 +657,28 @@ class _GameControllerState extends State<GameController> {
           event: _pendingEvent!,
           playerCredits: player!.credits,
           playerHp: player!.hp,
+          playerMaxHp: player!.effectiveMaxHp,
+          playerAttack: player!.baseAttack + player!.statusAttackModifier,
+          playerDefense: player!.statusDefenseModifier,
+          playerLuck: player!.getEffectiveLuck(equippedSlots),
           playerInventory: inventory,
           maxInventory: maxInventorySize,
           onComplete: (result) {
             setState(() {
-              // Apply gold change
               player!.credits = (player!.credits + result.goldChange).clamp(
                 0,
                 99999,
               );
 
-              // Apply HP change
               player!.hp = (player!.hp + result.hpChange).clamp(
                 0,
                 player!.effectiveMaxHp,
               );
 
-              // Apply stat boosts (permanent attack increase)
               if (result.statBoost > 0) {
                 player!.baseAttack += result.statBoost;
               }
 
-              // Apply status effects
               for (final effectType in result.statusEffectsToApply) {
                 switch (effectType) {
                   case StatusEffectType.poison:
@@ -688,27 +744,23 @@ class _GameControllerState extends State<GameController> {
                 }
               }
 
-              // Apply item gains
               for (final item in result.itemsGained) {
                 if (inventory.length < maxInventorySize) {
                   inventory.add(item);
                 }
               }
 
-              // Check if player died from event
               if (player!.hp <= 0) {
                 player!.hp = 0;
                 _pendingEvent = null;
-                syncPlayerStateToCloud();
+                _autoSave();
                 changeScreen('game_over');
                 return;
               }
 
-              // Consume the event and return to main
               _pendingEvent = null;
             });
-            syncPlayerStateToCloud();
-            syncInventoryToCloud();
+            _autoSave();
             changeScreen('main');
           },
         );
@@ -733,7 +785,9 @@ class _GameControllerState extends State<GameController> {
               lastShopRefreshHour = -1000;
               lastMerchantRotationHour = -1000;
               shopItems = [];
-              _currentScreen = 'character_select';
+              _currentSaveSlot = null;
+              _saveName = 'Untitled Save';
+              _currentScreen = 'save_manager';
             });
           },
         );

@@ -266,6 +266,51 @@ class StatusEffect {
     }
   }
 
+  /// Serialize to JSON
+  Map<String, dynamic> toJson() => {
+    'type': type.name,
+    'durationType': durationType.name,
+    'remainingDuration': remainingDuration,
+    'cureMethod': cureMethod.name,
+    'cureDescription': cureDescription,
+    'requiredCureCount': requiredCureCount,
+    'currentCureProgress': currentCureProgress,
+    'attackModifier': attackModifier,
+    'defenseModifier': defenseModifier,
+    'critChanceModifier': critChanceModifier,
+    'luckModifier': luckModifier,
+    'damageTakenModifier': damageTakenModifier,
+    'healPerTurn': healPerTurn,
+    'damagePerTurn': damagePerTurn,
+    'lifeStealModifier': lifeStealModifier,
+    'maxHpModifier': maxHpModifier,
+  };
+
+  /// Deserialize from JSON
+  factory StatusEffect.fromJson(Map<String, dynamic> json) => StatusEffect(
+    type: StatusEffectType.values.byName(json['type'] as String),
+    durationType: StatusDurationType.values.byName(
+      json['durationType'] as String,
+    ),
+    remainingDuration: json['remainingDuration'] as int,
+    cureMethod: CureMethod.values.byName(
+      json['cureMethod'] as String? ?? 'battleOnly',
+    ),
+    cureDescription: json['cureDescription'] as String?,
+    requiredCureCount: json['requiredCureCount'] as int? ?? 1,
+    currentCureProgress: json['currentCureProgress'] as int? ?? 0,
+    attackModifier: json['attackModifier'] as int? ?? 0,
+    defenseModifier: json['defenseModifier'] as int? ?? 0,
+    critChanceModifier: (json['critChanceModifier'] as num?)?.toDouble() ?? 0.0,
+    luckModifier: (json['luckModifier'] as num?)?.toDouble() ?? 0.0,
+    damageTakenModifier:
+        (json['damageTakenModifier'] as num?)?.toDouble() ?? 1.0,
+    healPerTurn: json['healPerTurn'] as int? ?? 0,
+    damagePerTurn: json['damagePerTurn'] as int? ?? 0,
+    lifeStealModifier: (json['lifeStealModifier'] as num?)?.toDouble() ?? 0.0,
+    maxHpModifier: json['maxHpModifier'] as int? ?? 0,
+  );
+
   StatusEffect clone() {
     return StatusEffect(
       type: type,
