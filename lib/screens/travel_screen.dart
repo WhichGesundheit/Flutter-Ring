@@ -1,5 +1,4 @@
-import 'dart:math';
-import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/boss.dart';
 import '../models/damage_type.dart';
@@ -10,127 +9,11 @@ import '../models/enemy_pool.dart';
 import '../models/zone.dart';
 import '../models/character.dart';
 import '../models/npc.dart';
+import '../models/status_effect.dart';
 import '../widgets/game_theme.dart';
 import '../widgets/stylish_popup.dart';
+import '../widgets/sphere_map_painter.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Connection-line painter – draws between nodes in world space
-// ─────────────────────────────────────────────────────────────────────────────
-class _ConnectionPainter extends CustomPainter {
-  final Map<ZoneType, Offset> nodePositions;
-  final int currentDay;
-
-  _ConnectionPainter({required this.nodePositions, required this.currentDay});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final drawn = <String>{};
-
-    for (final entry in Zone.worldMap.entries) {
-      final fromZone = entry.value;
-      final from = nodePositions[entry.key];
-      if (from == null) continue;
-
-      for (final target in fromZone.connections) {
-        final key = _edgeKey(entry.key, target);
-        if (drawn.contains(key)) continue;
-        drawn.add(key);
-
-        final to = nodePositions[target];
-        if (to == null) continue;
-
-        final bothUnlocked =
-            fromZone.isUnlocked(currentDay) &&
-            Zone.worldMap[target]!.isUnlocked(currentDay);
-
-        _drawGlowLine(canvas, from, to, bothUnlocked);
-      }
-    }
-  }
-
-  String _edgeKey(ZoneType a, ZoneType b) {
-    final i = a.index <= b.index ? a : b;
-    final j = a.index <= b.index ? b : a;
-    return '${i.index}-${j.index}';
-  }
-
-  void _drawGlowLine(Canvas canvas, Offset a, Offset b, bool active) {
-    if (active) {
-      final glowPaint = Paint()
-        ..strokeWidth = 10
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
-        ..color = Colors.cyanAccent.withValues(alpha: 0.3);
-      canvas.drawLine(a, b, glowPaint);
-
-      final corePaint = Paint()
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round
-        ..shader = ui.Gradient.linear(a, b, [
-          Colors.cyanAccent.withValues(alpha: 0.9),
-          Colors.tealAccent.withValues(alpha: 0.9),
-        ]);
-      canvas.drawLine(a, b, corePaint);
-    } else {
-      final dimPaint = Paint()
-        ..strokeWidth = 1.5
-        ..strokeCap = StrokeCap.round
-        ..color = Colors.grey.withValues(alpha: 0.25);
-      canvas.drawLine(a, b, dimPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConnectionPainter old) =>
-      currentDay != old.currentDay;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pulse animation
-// ─────────────────────────────────────────────────────────────────────────────
-class _PulseAnimation extends StatefulWidget {
-  final Widget child;
-  const _PulseAnimation({required this.child});
-
-  @override
-  State<_PulseAnimation> createState() => _PulseAnimationState();
-}
-
-class _PulseAnimationState extends State<_PulseAnimation>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, child) {
-        final v = 0.85 + 0.15 * _ctrl.value;
-        return Transform.scale(scale: v, child: child);
-      },
-      child: widget.child,
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Travel screen
-// ─────────────────────────────────────────────────────────────────────────────
 class TravelScreen extends StatefulWidget {
   final int hoursPassed;
   final ZoneType currentZone;
@@ -141,6 +24,8 @@ class TravelScreen extends StatefulWidget {
   final BossEncounterTracker? bossTracker;
   final MerchantManager? merchantManager;
   final NPCManager? npcManager;
+  final List<Item> inventory;
+  final int maxInventorySize;
 
   const TravelScreen({
     super.key,
@@ -153,55 +38,48 @@ class TravelScreen extends StatefulWidget {
     this.bossTracker,
     this.merchantManager,
     this.npcManager,
+    this.inventory = const [],
+    this.maxInventorySize = 20,
   });
 
   @override
   State<TravelScreen> createState() => _TravelScreenState();
 }
 
-class _TravelScreenState extends State<TravelScreen> {
-  ZoneType? _selectedZone;
-  final TransformationController _mapTransformController =
-      TransformationController();
-  final GlobalKey _mapAreaKey = GlobalKey();
+class _TravelScreenState extends State<TravelScreen>
+    with TickerProviderStateMixin {
+  // ── Sphere state ──
+  double _angleX = 0.4;
+  double _angleY = 0.0;
+  double _scale = 1.0;
+  double _baseScale = 1.0;
+  bool _isDragging = false;
+  late final List<SphereNode> _nodes;
+  late final AnimationController _autoRotateCtrl;
 
-  @override
-  void initState() {
-    super.initState();
-    _computeWorldPositions();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _centerOnPlayer();
-    });
-  }
+  // ── Smooth zoom animation (select/deselect adjacent node) ──
+  late final AnimationController _zoomAnimCtrl;
+  double _zoomAnimStart = 1.0;
+  double _zoomAnimEnd = 1.0;
+  static const double _zoomSelectScale = 1.6;
+  static const double _zoomDefaultScale = 1.0;
 
-  void _centerOnPlayer() {
-    final pos = _worldPositions[widget.currentZone];
-    if (pos == null) return;
-    final renderBox =
-        _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.hasSize) return;
-    final size = renderBox.size;
-    final dx = size.width / 2 - pos.dx;
-    final dy = size.height / 2 - pos.dy;
-    _mapTransformController.value = Matrix4.identity()
-      ..setTranslationRaw(dx, dy, 0);
-  }
+  // ── Recenter animation ──
+  late final AnimationController _centerAnimCtrl;
+  double _centerStartAngleX = 0.0;
+  double _centerStartAngleY = 0.0;
+  double _centerTargetAngleX = 0.0;
+  double _centerTargetAngleY = 0.0;
+
+  // ── Merchant floating icon animation ──
+  late final AnimationController _merchantAnimCtrl;
+
+  // ── Selection state ──
+  ZoneType? _selectedZone; // tapped node on sphere or adjacent button
+  ZoneType?
+  _destinationZone; // confirmed destination for travel (two-step flow)
 
   int get _currentDay => widget.hoursPassed ~/ 24;
-  bool _isAdjacent(ZoneType a, ZoneType b) =>
-      Zone.worldMap[a]!.connections.contains(b);
-
-  // ── World-space node positions (large canvas) ──
-  static const double _worldSize = 1000.0;
-  final Map<ZoneType, Offset> _worldPositions = {};
-
-  void _computeWorldPositions() {
-    _worldPositions.clear();
-    for (final zt in ZoneType.values) {
-      final rel = Zone.worldMap[zt]!.mapPosition;
-      _worldPositions[zt] = Offset(rel.dx * _worldSize, rel.dy * _worldSize);
-    }
-  }
 
   bool get _hasBossAvailable {
     final currentDay = widget.hoursPassed ~/ 24;
@@ -221,35 +99,146 @@ class _TravelScreenState extends State<TravelScreen> {
     return WeeklyBosses.getBossForWeek(week);
   }
 
-  void _selectZone(ZoneType zone) {
-    final zoneData = Zone.worldMap[zone]!;
-    final unlocked = zoneData.isUnlocked(_currentDay);
-    final isCurrent = zone == widget.currentZone;
+  List<ZoneType> get _adjacentZones =>
+      Zone.worldMap[widget.currentZone]!.connections.toList();
 
-    if (!unlocked) {
-      showStylishPopup(
-        context,
-        title: 'SECTOR LOCKED',
-        message: 'This sector is locked until Day ${zoneData.unlockDay}.',
-        icon: Icons.lock_outline,
-        iconColor: Colors.orangeAccent,
-      );
-      return;
-    }
+  bool _isAdjacent(ZoneType a, ZoneType b) =>
+      Zone.worldMap[a]!.connections.contains(b);
 
-    setState(() => _selectedZone = zone);
+  @override
+  void initState() {
+    super.initState();
+    _nodes = buildSphereNodes();
+    _autoRotateCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 60),
+    )..repeat();
+    _autoRotateCtrl.addListener(() {
+      if (!_isDragging && mounted && !_centerAnimCtrl.isAnimating) {
+        setState(() {
+          _angleY += 0.0003;
+        });
+      }
+    });
 
-    if (!isCurrent && !_isAdjacent(widget.currentZone, zone)) {
-      showStylishPopup(
-        context,
-        title: 'NO DIRECT ROUTE',
-        message: 'Travel through adjacent sectors first.',
-        icon: Icons.route,
-        iconColor: Colors.orangeAccent,
-      );
-    }
+    // Smooth zoom animation (300ms)
+    _zoomAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _zoomAnimCtrl.addListener(() {
+      final t = Curves.easeInOutCubic.transform(_zoomAnimCtrl.value);
+      setState(() {
+        _scale = _zoomAnimStart + (_zoomAnimEnd - _zoomAnimStart) * t;
+      });
+    });
+
+    // Recenter animation (400ms)
+    _centerAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _centerAnimCtrl.addListener(() {
+      final t = Curves.easeInOutCubic.transform(_centerAnimCtrl.value);
+      setState(() {
+        _angleX =
+            _centerStartAngleX + (_centerTargetAngleX - _centerStartAngleX) * t;
+        _angleY =
+            _centerStartAngleY + (_centerTargetAngleY - _centerStartAngleY) * t;
+      });
+    });
+
+    // Merchant floating icon animation (continuous 2s bob)
+    _merchantAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
   }
 
+  @override
+  void dispose() {
+    _autoRotateCtrl.dispose();
+    _zoomAnimCtrl.dispose();
+    _centerAnimCtrl.dispose();
+    _merchantAnimCtrl.dispose();
+    super.dispose();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ZONE SELECTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _selectAdjacentZone(ZoneType zone) {
+    // Two-step flow: tap adjacent button → sets destination (highlights on sphere) → press confirm to travel
+    setState(() {
+      _selectedZone = zone;
+      _destinationZone = zone;
+    });
+
+    // Smooth zoom in and rotate to center the destination node
+    _animateZoomTo(_zoomSelectScale);
+    _centerNodeOnSphere(zone);
+  }
+
+  void _clearDestination() {
+    setState(() {
+      _destinationZone = null;
+    });
+
+    // Smooth zoom out
+    _animateZoomTo(_zoomDefaultScale);
+  }
+
+  void _animateZoomTo(double target) {
+    _zoomAnimStart = _scale;
+    _zoomAnimEnd = target;
+    _zoomAnimCtrl.forward(from: 0.0);
+  }
+
+  void _recenterToCurrentNode() {
+    _centerNodeOnSphere(widget.currentZone);
+  }
+
+  /// Rotates the sphere so that [zone] appears at the center (facing the viewer).
+  void _centerNodeOnSphere(ZoneType zone) {
+    final targetNode = _nodes.firstWhere(
+      (n) => n.zoneType == zone,
+      orElse: () => _nodes.first,
+    );
+
+    final nx = targetNode.x;
+    final ny = targetNode.y;
+    final nz = targetNode.z;
+
+    // angleX to make y1 = 0 (vertically centered)
+    final targetAngleX = math.atan2(ny, nz);
+
+    // z1 after X rotation = sqrt(ny² + nz²)
+    final z1 = math.sqrt(ny * ny + nz * nz);
+
+    // angleY to place node at center of sphere (x2 = 0, facing viewer)
+    final phi = math.atan2(z1, nx);
+    const double targetX2 = 0.0;
+    final targetAngleY = phi - math.acos(targetX2);
+
+    // Animate from current angles to target
+    _centerStartAngleX = _angleX;
+    _centerStartAngleY = _angleY;
+    _centerTargetAngleX = targetAngleX;
+    _centerTargetAngleY = targetAngleY;
+    _centerAnimCtrl.forward(from: 0.0);
+  }
+
+  void _confirmTravel() {
+    if (_destinationZone == null) return;
+    if (_destinationZone == widget.currentZone) return;
+    if (!_isAdjacent(widget.currentZone, _destinationZone!)) return;
+
+    widget.onZoneTravel(_destinationZone!);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTION HANDLERS (preserved from original)
+  // ═══════════════════════════════════════════════════════════════════════════
   void _handleLocalAction(String action) {
     if (action == 'shop') {
       widget.onAction('Shop', null, 0);
@@ -279,7 +268,7 @@ class _TravelScreenState extends State<TravelScreen> {
         iconColor: Colors.lightBlueAccent,
       );
     } else if (action == 'explore') {
-      final random = Random();
+      final random = math.Random();
       final roll = random.nextDouble();
       if (roll < 0.6) {
         final enemy = EnemyPool.getEnemyForZone(widget.currentZone);
@@ -301,6 +290,30 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
+  void _handleCamp(int hours) {
+    final maxHp = widget.player.effectiveMaxHp;
+    final healPercent = hours >= 8 ? 100 : (hours >= 4 ? 50 : 25);
+    final healAmount = ((maxHp - widget.player.hp) * healPercent / 100).round();
+    widget.player.hp = (widget.player.hp + healAmount).clamp(0, maxHp);
+    // Cure resting-curable status effects (bleeding, burn, poison, etc.)
+    final curedEffects = widget.player.attemptCure(CureMethod.resting);
+    widget.onAction('Camp', null, hours);
+    if (curedEffects.isNotEmpty) {
+      final names = curedEffects.map((e) => e.name).join(', ');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showStylishPopup(
+            context,
+            title: 'CONDITIONS CURED',
+            message: names,
+            icon: Icons.healing,
+            iconColor: Colors.greenAccent,
+          );
+        }
+      });
+    }
+  }
+
   void _challengeWeeklyBoss() {
     final boss = _getNextBoss();
     if (boss != null) {
@@ -308,374 +321,6 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ACTION POPUP
-  // ═══════════════════════════════════════════════════════════════════════════
-  void _showActionPopup() {
-    final zoneData = Zone.worldMap[widget.currentZone]!;
-    final isSettlement = zoneData.isSettlement;
-    final merchantsHere = widget.merchantManager != null
-        ? widget.merchantManager!.getMerchantsAt(widget.currentZone)
-        : <dynamic>[];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF111522),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: zoneData.color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: zoneData.color.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.touch_app, color: zoneData.color, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      'ACTIONS AT ${zoneData.name.toUpperCase()}',
-                      style: TextStyle(
-                        color: zoneData.color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Scout Area button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[900],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.search, size: 20),
-                  label: const Text(
-                    'SCOUT AREA',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _handleLocalAction('explore');
-                  },
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Camp button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal[800],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.campaign, size: 20),
-                  label: const Text(
-                    'CAMP',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _showCampDurationPicker();
-                  },
-                ),
-              ),
-
-              // Shop (settlements with merchant)
-              if (isSettlement && merchantsHere.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange[900],
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 0,
-                    ),
-                    icon: const Icon(Icons.store, size: 20),
-                    label: const Text(
-                      'SHOP',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      _handleLocalAction('shop');
-                    },
-                  ),
-                ),
-              ],
-
-              // Settlement extras
-              if (isSettlement) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 42,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.greenAccent,
-                            side: BorderSide(
-                              color: Colors.greenAccent.withValues(alpha: 0.4),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          icon: const Icon(Icons.bed, size: 16),
-                          label: const Text(
-                            'REST (10c)',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          onPressed: widget.player.credits >= 10
-                              ? () {
-                                  Navigator.of(ctx).pop();
-                                  _handleLocalAction('rest');
-                                }
-                              : null,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: SizedBox(
-                        height: 42,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.lightBlueAccent,
-                            side: BorderSide(
-                              color: Colors.lightBlueAccent.withValues(
-                                alpha: 0.4,
-                              ),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          icon: const Icon(Icons.chat, size: 16),
-                          label: const Text(
-                            'NPC',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.of(ctx).pop();
-                            _handleLocalAction('npc');
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CAMP DURATION PICKER
-  // ═══════════════════════════════════════════════════════════════════════════
-  void _showCampDurationPicker() {
-    final currentHp = widget.player.hp;
-    final maxHp = widget.player.effectiveMaxHp;
-    final hpMissing = maxHp - currentHp;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF111522),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'SET CAMP',
-                style: TextStyle(
-                  color: Colors.tealAccent,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'HP: $currentHp / $maxHp ($hpMissing missing)',
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
-              ),
-              const SizedBox(height: 16),
-
-              // 2 hour camp
-              _campDurationOption(
-                ctx,
-                hours: 2,
-                healPercent: 25,
-                description: 'Quick rest — recover 25% HP',
-                icon: Icons.nightlight_round,
-                color: Colors.blue[800]!,
-              ),
-              const SizedBox(height: 8),
-
-              // 4 hour camp
-              _campDurationOption(
-                ctx,
-                hours: 4,
-                healPercent: 50,
-                description: 'Extended rest — recover 50% HP',
-                icon: Icons.nights_stay,
-                color: Colors.indigo[800]!,
-              ),
-              const SizedBox(height: 8),
-
-              // 8 hour camp
-              _campDurationOption(
-                ctx,
-                hours: 8,
-                healPercent: 100,
-                description: 'Full rest — recover 100% HP',
-                icon: Icons.bedtime,
-                color: Colors.purple[800]!,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _campDurationOption(
-    BuildContext ctx, {
-    required int hours,
-    required int healPercent,
-    required String description,
-    required IconData icon,
-    required Color color,
-  }) {
-    final currentHp = widget.player.hp;
-    final maxHp = widget.player.effectiveMaxHp;
-    final healAmount = ((maxHp - currentHp) * healPercent / 100).round();
-    final newHp = (currentHp + healAmount).clamp(0, maxHp);
-
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          elevation: 0,
-        ),
-        icon: Icon(icon, size: 22),
-        label: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CAMP $hours HOURS',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                letterSpacing: 0.8,
-              ),
-            ),
-            Text(
-              '$description ($currentHp→$newHp HP)',
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: Colors.white70,
-              ),
-            ),
-          ],
-        ),
-        onPressed: () {
-          Navigator.of(ctx).pop();
-          _handleCamp(hours);
-        },
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CAMP HANDLER
-  // ═══════════════════════════════════════════════════════════════════════════
-  void _handleCamp(int hours) {
-    // Heal player based on duration
-    final maxHp = widget.player.effectiveMaxHp;
-    final healPercent = hours >= 8 ? 100 : (hours >= 4 ? 50 : 25);
-    final healAmount = ((maxHp - widget.player.hp) * healPercent / 100).round();
-    widget.player.hp = (widget.player.hp + healAmount).clamp(0, maxHp);
-
-    // Trigger camp event
-    widget.onAction('Camp', null, hours);
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // MERCHANT SHOP
-  // ═══════════════════════════════════════════════════════════════════════════
   void _openMerchantShop(TravelingMerchant merchant) {
     final stock = merchant.getStock(widget.hoursPassed);
     Navigator.of(context).push(
@@ -713,13 +358,6 @@ class _TravelScreenState extends State<TravelScreen> {
                           ),
                         ),
                       ),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Stock refreshes every 24h · Merchant moves every 48h',
-                        style: TextStyle(color: Colors.white24, fontSize: 10),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -754,21 +392,14 @@ class _TravelScreenState extends State<TravelScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        item.name,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    _rarityBadge(item.rarity),
-                                  ],
+                                Text(
+                                  item.name,
+                                  style: TextStyle(
+                                    color: color,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
@@ -856,6 +487,700 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
+  void _showMerchantSelection(List<TravelingMerchant> merchants) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111522),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            const Text(
+              'MERCHANTS IN AREA',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...merchants.map(
+              (m) => ListTile(
+                leading: Text(
+                  m.type.icon,
+                  style: const TextStyle(fontSize: 24),
+                ),
+                title: Text(
+                  m.type.label,
+                  style: TextStyle(
+                    color: m.type == MerchantType.legendary
+                        ? GameColors.gold
+                        : Colors.tealAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  m.type.description,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: Colors.white38,
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openMerchantShop(m);
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CAMP DURATION PICKER
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _showCampDurationPicker() {
+    final currentHp = widget.player.hp;
+    final maxHp = widget.player.effectiveMaxHp;
+    final hpMissing = maxHp - currentHp;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111522),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'SET CAMP',
+                style: TextStyle(
+                  color: Colors.tealAccent,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'HP: $currentHp / $maxHp ($hpMissing missing)',
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              const SizedBox(height: 16),
+              _campDurationOption(
+                ctx,
+                hours: 2,
+                healPercent: 25,
+                description: 'Quick rest — recover 25% HP',
+                icon: Icons.nightlight_round,
+                color: Colors.blue[800]!,
+              ),
+              const SizedBox(height: 8),
+              _campDurationOption(
+                ctx,
+                hours: 4,
+                healPercent: 50,
+                description: 'Extended rest — recover 50% HP',
+                icon: Icons.nights_stay,
+                color: Colors.indigo[800]!,
+              ),
+              const SizedBox(height: 8),
+              _campDurationOption(
+                ctx,
+                hours: 8,
+                healPercent: 100,
+                description: 'Full rest — recover 100% HP',
+                icon: Icons.bedtime,
+                color: Colors.purple[800]!,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _campDurationOption(
+    BuildContext ctx, {
+    required int hours,
+    required int healPercent,
+    required String description,
+    required IconData icon,
+    required Color color,
+  }) {
+    final currentHp = widget.player.hp;
+    final maxHp = widget.player.effectiveMaxHp;
+    final healAmount = ((maxHp - currentHp) * healPercent / 100).round();
+    final newHp = (currentHp + healAmount).clamp(0, maxHp);
+
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 0,
+        ),
+        icon: Icon(icon, size: 22),
+        label: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'CAMP $hours HOURS',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                letterSpacing: 0.8,
+              ),
+            ),
+            Text(
+              '$description ($currentHp→$newHp HP)',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ),
+        onPressed: () {
+          Navigator.of(ctx).pop();
+          _handleCamp(hours);
+        },
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GLEED'S DEN (preserved)
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _showGleedDen() {
+    bool showUnboxResult = false;
+    Item? lastUnboxedItem;
+    MysteryBoxTier? lastTier;
+
+    void attemptCure(StateSetter setModalState) {
+      final cost = GleedShop.gamblingCost;
+      if (widget.player.credits < cost) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Not enough credits! Need ${cost}c to gamble.',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.redAccent.withValues(alpha: 0.8),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      setModalState(() {
+        widget.player.credits -= cost;
+      });
+      if (GleedShop.attemptGamblingCure()) {
+        final winnings = cost + GleedShop.cureBonusCredits;
+        setModalState(() {
+          widget.player.credits += winnings;
+        });
+        widget.onAction('CureGleed', null, 0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'GLEED\'s luck rubs off — cursed! Won ${winnings}c!',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.greenAccent.withValues(alpha: 0.8),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'GLEED shrugs. "Bad luck, friend. Lost ${cost}c."',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.orangeAccent.withValues(alpha: 0.8),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+
+    void buyMysteryBox(StateSetter setModalState, MysteryBoxTier tier) {
+      if (widget.player.credits < tier.price) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Not enough credits! Need ${tier.price}c',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.redAccent.withValues(alpha: 0.8),
+          ),
+        );
+        return;
+      }
+      if (widget.inventory.length >= widget.maxInventorySize) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Inventory full!',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.orangeAccent.withValues(alpha: 0.8),
+          ),
+        );
+        return;
+      }
+      setModalState(() {
+        widget.player.credits -= tier.price;
+        final luckMod = widget.player.getEffectiveLuck([]).toDouble();
+        lastUnboxedItem = GleedShop.rollMysteryBox(tier, luckModifier: luckMod);
+        lastTier = tier;
+        showUnboxResult = true;
+      });
+    }
+
+    void collectItem(StateSetter setModalState) {
+      if (lastUnboxedItem != null) {
+        widget.inventory.add(lastUnboxedItem!);
+        setModalState(() {
+          lastUnboxedItem = null;
+          showUnboxResult = false;
+          lastTier = null;
+        });
+      }
+    }
+
+    void scrapItem(StateSetter setModalState) {
+      if (lastUnboxedItem != null) {
+        setModalState(() {
+          widget.player.credits += lastUnboxedItem!.sellValue;
+          lastUnboxedItem = null;
+          showUnboxResult = false;
+          lastTier = null;
+        });
+      }
+    }
+
+    bool hasCureableEffects = widget.player.activeStatusEffects.any(
+      (e) => e.cureMethod == CureMethod.gambling,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111522),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          final currentCredits = widget.player.credits;
+          return DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (ctx, scrollController) => Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF111522),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: showUnboxResult && lastUnboxedItem != null
+                  ? _buildGleedUnboxResult(
+                      lastUnboxedItem!,
+                      lastTier,
+                      () => setModalState(() {
+                        collectItem(setModalState);
+                        Navigator.of(ctx).pop();
+                      }),
+                      () => scrapItem(setModalState),
+                    )
+                  : _buildGleedShopContent(
+                      ctx,
+                      scrollController,
+                      currentCredits,
+                      hasCureableEffects,
+                      (tier) => buyMysteryBox(setModalState, tier),
+                      () => attemptCure(setModalState),
+                    ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildGleedShopContent(
+    BuildContext ctx,
+    ScrollController scrollController,
+    int currentCredits,
+    bool hasCureableEffects,
+    Function(MysteryBoxTier) onBuyBox,
+    VoidCallback onAttemptCure,
+  ) {
+    return SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: GameColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.amberAccent.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Column(
+              children: [
+                const Text('🃏', style: TextStyle(fontSize: 48)),
+                const SizedBox(height: 8),
+                const Text(
+                  '"Welcome, welcome! Step right up to GLEED\'s Den!"',
+                  style: TextStyle(
+                    color: Colors.amberAccent,
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Credits: ${currentCredits}c',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'MYSTERY BOXES',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...MysteryBoxTier.values.map(
+            (tier) => _buildGleedMysteryBoxCard(
+              tier,
+              currentCredits,
+              () => onBuyBox(tier),
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (hasCureableEffects) ...[
+            const Text(
+              'STATUS CURE',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: GameColors.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.tealAccent.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    '"Feeling cursed? A gamble might shake it off..."',
+                    style: TextStyle(
+                      color: Colors.tealAccent,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '30% chance to cure cursed/weakened status effects',
+                    style: TextStyle(color: Colors.white54, fontSize: 10),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Cost: ${GleedShop.gamblingCost}c  ·  Win: ${GleedShop.gamblingCost + GleedShop.cureBonusCredits}c on success',
+                    style: TextStyle(
+                      color: Colors.amberAccent.withValues(alpha: 0.7),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal[800],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: onAttemptCure,
+                    child: Text(
+                      'TRY YOUR LUCK (${GleedShop.gamblingCost}c)',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+          SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GameColors.surface,
+                foregroundColor: Colors.white54,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text(
+                'LEAVE THE DEN',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGleedMysteryBoxCard(
+    MysteryBoxTier tier,
+    int currentCredits,
+    VoidCallback onBuy,
+  ) {
+    final canAfford = currentCredits >= tier.price;
+    final hasSpace = widget.inventory.length < widget.maxInventorySize;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GameColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: canAfford && hasSpace
+              ? Colors.amberAccent.withValues(alpha: 0.4)
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(tier.icon, style: const TextStyle(fontSize: 36)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tier.label,
+                  style: TextStyle(
+                    color: canAfford ? Colors.white : Colors.grey,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tier.description,
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: canAfford && hasSpace
+                  ? Colors.amber[800]
+                  : Colors.grey[800],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: canAfford && hasSpace ? onBuy : null,
+            child: Text(
+              '${tier.price}c',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGleedUnboxResult(
+    Item item,
+    MysteryBoxTier? tier,
+    VoidCallback onCollect,
+    VoidCallback onScrap,
+  ) {
+    final color = _rarityColor(item.rarity);
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.15),
+              border: Border.all(color: color, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(_getSlotIcon(item.type), color: color, size: 64),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            tier?.label ?? 'Mystery Box',
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.name,
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          _rarityBadge(item.rarity),
+          const SizedBox(height: 12),
+          Text(
+            item.description,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[800],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: onCollect,
+                  child: const Text(
+                    'COLLECT',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[800],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: onScrap,
+                  child: Text(
+                    'SCRAP (+${item.sellValue}c)',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ZONE HINTS (preserved)
+  // ═══════════════════════════════════════════════════════════════════════════
   List<String> _getZoneSpecificHints(ZoneType zone) {
     switch (zone) {
       case ZoneType.town:
@@ -921,301 +1246,6 @@ class _TravelScreenState extends State<TravelScreen> {
           "The only way back is through the Core Meltdown.",
           "Legends say the Architect's final creation sleeps here.",
         ];
-      case ZoneType.swamp:
-        return [
-          "The Data Swamp is a quagmire of corrupted streams.",
-          "The Decommissioned Factory lies to the east.",
-          "The Static Wasteland borders the north.",
-          "Toxic waste pools hide useful components.",
-        ];
-      case ZoneType.mountain:
-        return [
-          "The Frozen Peak crystallizes unprotected code.",
-          "The Infinite Library lies to the north.",
-          "The Deep Memory Caves border the south.",
-          "Cold resistance is essential on the peak.",
-        ];
-      case ZoneType.desert:
-        return [
-          "The Silicon Dunes are vast and treacherous.",
-          "The Decommissioned Factory lies to the east.",
-          "Rusthaven Outpost borders the west.",
-          "Fire-type enemies roam the dunes.",
-        ];
-      case ZoneType.library:
-        return [
-          "The Infinite Library holds forgotten algorithms.",
-          "The Signal Tower lies to the north.",
-          "The Frozen Peak borders the south.",
-          "Research stations here can reveal enemy weaknesses.",
-        ];
-      case ZoneType.factory:
-        return [
-          "The Decommissioned Factory runs wild with corrupted automatons.",
-          "The Silicon Dunes border the west.",
-          "The Data Swamp lies to the south.",
-          "Factory automatons drop valuable components.",
-        ];
-      case ZoneType.ocean:
-        return [
-          "The Deep Net Ocean is vast. Deleted files drift like jellyfish.",
-          "The Signal Tower borders the west.",
-          "The Apex Citadel lies to the east.",
-          "Void-type creatures lurk in the deepest waters.",
-        ];
-      case ZoneType.tower:
-        return [
-          "The Signal Tower still broadcasts control signals.",
-          "The Deep Net Ocean borders the east.",
-          "The Infinite Library lies to the south.",
-          "Electromagnetic pulses can disrupt your systems.",
-        ];
-      // New zone hints
-      case ZoneType.neonBazaar:
-        return [
-          "Neon signs flash advertisements for illegal augments.",
-          "The Bazaar's underground tunnels lead to hidden vendors.",
-          "Watch your back — theft is common here.",
-          "Rare commodities change hands in the shadow alleys.",
-        ];
-      case ZoneType.crystalMines:
-        return [
-          "Glowing data-crystals pulse with stored energy.",
-          "Deeper tunnels hide the most valuable — and dangerous — formations.",
-          "Mining drones still patrol the upper shafts.",
-          "Crystal dust can enhance your gear if handled carefully.",
-        ];
-      case ZoneType.quantumRift:
-        return [
-          "Reality bends at the edges of the rift.",
-          "Quantum probability makes every step unpredictable.",
-          "Powerful enemies guard the rift's deepest secrets.",
-          "The void leaks through — stay alert.",
-        ];
-      case ZoneType.shadowMarket:
-        return [
-          "No questions asked, no guarantees given.",
-          "The Market operates in the gaps between sectors.",
-          "Information is the most valuable currency here.",
-          "Legendary merchants sometimes pass through.",
-        ];
-      case ZoneType.voidShrine:
-        return [
-          "The void energy is overwhelming here.",
-          "Pilgrims come to meditate but rarely return unchanged.",
-          "Ancient rituals still echo through the shrine.",
-          "The void always demands something in return.",
-        ];
-      case ZoneType.chromeDocks:
-        return [
-          "Data-ships dock and depart on unpredictable schedules.",
-          "The chrome structures gleam under artificial sunlight.",
-          "Smugglers use the docks to move rare goods.",
-          "The port authority maintains strict order.",
-        ];
-      case ZoneType.dataNexus:
-        return [
-          "All data streams converge at the Nexus.",
-          "The combined knowledge of the Ring pulses through here.",
-          "Hackers compete for access to the central servers.",
-          "The Nexus holds secrets from the Ring's creation.",
-        ];
-      case ZoneType.ghostTerminal:
-        return [
-          "Residual AI consciousness haunts these terminals.",
-          "The old command center still processes ancient data.",
-          "Ghost signals flicker across dead screens.",
-          "Something watches from the abandoned systems.",
-        ];
-      case ZoneType.solarForge:
-        return [
-          "Plasma rivers flow through abandoned assembly lines.",
-          "The heat here can corrupt unprotected code.",
-          "Valuable solar components lie scattered in the debris.",
-          "The Forge's reactors still hum with residual power.",
-        ];
-      case ZoneType.neuralGarden:
-        return [
-          "Data grows like plants in this tranquil zone.",
-          "Neural networks sprout from the ground.",
-          "The fruits of information are sweet — and nutritious.",
-          "A rare peaceful area in the Ring.",
-        ];
-      case ZoneType.circuitMarshes:
-        return [
-          "Toxic coolant fluid pools between rusted components.",
-          "Half-submerged circuit boards make travel treacherous.",
-          "The marshes hide valuable salvage beneath the surface.",
-          "Chemical fog limits visibility to a few meters.",
-        ];
-      case ZoneType.echoCaverns:
-        return [
-          "Whispers from the past echo through crystalline chambers.",
-          "Sound behaves strangely — footsteps come from wrong directions.",
-          "Fragments of memory drift on invisible currents.",
-          "The caverns hold echoes of deleted histories.",
-        ];
-      case ZoneType.plasmaFields:
-        return [
-          "Lightning strikes are constant across the open plains.",
-          "The air itself glows with charged particles.",
-          "Raw plasma energy can be harnessed — or destroy you.",
-          "The fields stretch endlessly in every direction.",
-        ];
-      case ZoneType.obsidianSpire:
-        return [
-          "Ancient defense systems guard the upper reaches.",
-          "The black glass structure pierces the clouds.",
-          "Only the strongest survive the Spire's trials.",
-          "Legends speak of treasures at the summit.",
-        ];
-      case ZoneType.voidGate:
-        return [
-          "The ultimate gateway — reality fractures here.",
-          "Only the most powerful runners survive.",
-          "The void beyond the Ring beckons.",
-          "There is no turning back once you enter.",
-        ];
-      case ZoneType.ironHarbor:
-        return [
-          "Retired mercenaries offer their services for a price.",
-          "The warship hulls creak in the digital wind.",
-          "Rugged traders deal in weapons and armor.",
-          "The harbor is defensible — a rare safe haven.",
-        ];
-      case ZoneType.chromeSpire:
-        return [
-          "Elite engineers craft the finest augmentations.",
-          "Chrome plating reflects the desert sun.",
-          "The Spire's workshops are legendary among runners.",
-          "Augmentations here are expensive but worth it.",
-        ];
-      case ZoneType.neonOasis:
-        return [
-          "Bioluminescent pools heal weary travelers.",
-          "The neon glow provides comfort in the darkness.",
-          "Healers here are skilled but demand fair payment.",
-          "A sanctuary for those who know where to look.",
-        ];
-      case ZoneType.blackMarketHub:
-        return [
-          "Illegal augments and forbidden data traded freely.",
-          "The encrypted marketplace exists in a pocket of the Ring.",
-          "Buyers and sellers use coded language.",
-          "Security is minimal — trust no one.",
-        ];
-      case ZoneType.skyDock:
-        return [
-          "Airship captains barter for fuel and supplies.",
-          "The floating settlement sways in the upper atmosphere.",
-          "Sky-runners share tales of the world above.",
-          "The view from here is breathtaking — and terrifying.",
-        ];
-      case ZoneType.scorchedPipeline:
-        return [
-          "Superheated data streams make traversal perilous.",
-          "The ancient pipeline still carries residual plasma.",
-          "Scorched walls tell tales of catastrophic failures.",
-          "The deeper you go, the hotter it gets.",
-        ];
-      case ZoneType.rustCanyon:
-        return [
-          "Rusted remnants of ancient machines line the walls.",
-          "The canyon runs deep — watch your footing.",
-          "Valuable components can be salvaged from the debris.",
-          "The rust here corrodes equipment rapidly.",
-        ];
-      case ZoneType.dataTorrent:
-        return [
-          "A rushing river of raw data flows through the canyon.",
-          "Swim against the current to find hidden caches.",
-          "The torrent carries fragments of deleted files.",
-          "The water is electrified — proceed with caution.",
-        ];
-      case ZoneType.decayedGrid:
-        return [
-          "Gravity shifts unpredictably between sectors.",
-          "The foundational grid has begun to collapse.",
-          "Falling debris is a constant hazard.",
-          "Old power conduits still spark with residual energy.",
-        ];
-      case ZoneType.shatteredCore:
-        return [
-          "Shards of crystallized data float in zero-gravity.",
-          "The remnants of an ancient processing core.",
-          "The overload that destroyed it left treasures behind.",
-          "Zero-gravity pockets make combat unpredictable.",
-        ];
-      case ZoneType.forgottenServer:
-        return [
-          "Legacy processes still run in the abandoned servers.",
-          "Treasures of the old world guard behind old firewalls.",
-          "The server farm stretches endlessly in the dark.",
-          "Ancient data logs reveal forgotten histories.",
-        ];
-      case ZoneType.acidSprawl:
-        return [
-          "Chemical waste has corroded everything into twisted metal.",
-          "Toxic fog limits visibility to a few meters.",
-          "The acid eats through unprotected equipment.",
-          "Salvageable components hide beneath the corrosion.",
-        ];
-      case ZoneType.hollowNetwork:
-        return [
-          "Echoes of deleted transmissions whisper through here.",
-          "The hollow conduits amplify every sound.",
-          "Something moves in the darkness between channels.",
-          "The network connects to forgotten sectors.",
-        ];
-      case ZoneType.staticRift:
-        return [
-          "Phantom duplicates appear from the static.",
-          "Fight yourself or outsmart your echo.",
-          "The rift creates copies of everything nearby.",
-          "Static interference disrupts targeting systems.",
-        ];
-      case ZoneType.deadSignal:
-        return [
-          "No transmissions escape this zone.",
-          "Total digital silence — the void within the void.",
-          "Your instruments go dark as you enter.",
-          "Only the strongest signals can penetrate.",
-        ];
-      case ZoneType.entropyWell:
-        return [
-          "Reality decomposes into base components here.",
-          "The gravity well pulls everything toward the center.",
-          "Data dissolves — time means nothing.",
-          "The closer you get, the more reality unravels.",
-        ];
-      case ZoneType.chromeLabyrinth:
-        return [
-          "The corridors rearrange themselves every cycle.",
-          "Mirrored walls create infinite reflections.",
-          "The labyrinth traps the unwary forever.",
-          "Only those who can read the patterns escape.",
-        ];
-      case ZoneType.voidNexus:
-        return [
-          "All void energies converge at this point.",
-          "The boundary between code and flesh blurs.",
-          "Reality is thinnest here — and most dangerous.",
-          "The void whispers promises of ultimate power.",
-        ];
-      case ZoneType.deepSpire:
-        return [
-          "A spire that descends rather than ascends.",
-          "Ancient code pulses like a heartbeat in the walls.",
-          "The deeper you go, the older the code becomes.",
-          "The Ring's deepest secrets lie at the bottom.",
-        ];
-      case ZoneType.quantumSea:
-        return [
-          "Every possible reality exists simultaneously.",
-          "Collapse the waveform or be consumed by it.",
-          "Quantum probability makes combat unpredictable.",
-          "The sea of possibility holds infinite treasures.",
-        ];
       default:
         return [
           "Explore this area carefully. There may be hidden dangers.",
@@ -1226,50 +1256,242 @@ class _TravelScreenState extends State<TravelScreen> {
     }
   }
 
-  void _travelToZone() {
-    if (_selectedZone == null) return;
-    if (_selectedZone == widget.currentZone) return;
-    if (!_isAdjacent(widget.currentZone, _selectedZone!)) return;
-
-    final zoneData = Zone.worldMap[_selectedZone!]!;
-    if (!zoneData.isUnlocked(_currentDay)) return;
-
-    widget.onZoneTravel(_selectedZone!);
-    if (mounted) {
-      setState(() => _selectedZone = null);
-    }
-  }
-
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUILD — SPLIT SCREEN LAYOUT
+  // ═══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    _computeWorldPositions();
-
     final currentZoneData = Zone.worldMap[widget.currentZone]!;
     final int hours = widget.hoursPassed % 24;
-    final selectedZoneData = _selectedZone != null
-        ? Zone.worldMap[_selectedZone!]
-        : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(currentZoneData, hours),
-            Expanded(flex: 5, child: _buildPannableMap()),
-            Expanded(
-              flex: 4,
-              child: _buildActionPanel(currentZoneData, selectedZoneData),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 700;
+
+            if (isWide) {
+              // ── LANDSCAPE: Side-by-side ──
+              return Row(
+                children: [
+                  // Left panel: 3D sphere + adjacent buttons
+                  SizedBox(
+                    width: constraints.maxWidth * 0.45,
+                    child: _buildSpherePanel(currentZoneData, hours),
+                  ),
+                  // Vertical divider
+                  const VerticalDivider(width: 1, color: Colors.white10),
+                  // Right panel: zone info + actions
+                  Expanded(child: _buildActionPanel(currentZoneData, hours)),
+                ],
+              );
+            } else {
+              // ── PORTRAIT: Stacked ──
+              return Column(
+                children: [
+                  // Top: 3D sphere + adjacent buttons
+                  Expanded(
+                    flex: 4,
+                    child: _buildSpherePanel(currentZoneData, hours),
+                  ),
+                  const Divider(height: 1, color: Colors.white10),
+                  // Bottom: zone info + actions
+                  Expanded(
+                    flex: 5,
+                    child: _buildActionPanel(currentZoneData, hours),
+                  ),
+                ],
+              );
+            }
+          },
         ),
       ),
     );
   }
 
-  Widget _buildHeader(Zone currentZoneData, int hours) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LEFT/TOP PANEL: 3D Sphere + Adjacent Node Buttons
+  // ═══════════════════════════════════════════════════════════════════════════
+  /// Compute the set of zones where traveling merchants are present
+  Set<ZoneType> get _merchantZones {
+    if (widget.merchantManager == null) return {};
+    return widget.merchantManager!.merchants.map((m) => m.currentZone).toSet();
+  }
+
+  Widget _buildSpherePanel(Zone currentZoneData, int hours) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(color: Color(0xFF0A0E1A)),
+      child: Column(
+        children: [
+          // ── Header ──
+          _buildSphereHeader(currentZoneData, hours),
+
+          // ── 3D Sphere with overlay controls ──
+          Expanded(
+            flex: 5,
+            child: Stack(
+              children: [
+                // The sphere itself
+                Positioned.fill(
+                  child: GestureDetector(
+                    onScaleStart: (details) {
+                      _baseScale = _scale;
+                      _isDragging = true;
+                    },
+                    onScaleUpdate: (details) {
+                      setState(() {
+                        if (details.scale != 1.0) {
+                          _scale = (_baseScale * details.scale).clamp(0.5, 2.5);
+                        }
+                        _angleY += details.focalPointDelta.dx * 0.008;
+                        _angleX -= details.focalPointDelta.dy * 0.008;
+                        _angleX = _angleX.clamp(-3.14159 / 2, 3.14159 / 2);
+                      });
+                    },
+                    onScaleEnd: (details) {
+                      _isDragging = false;
+                    },
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return CustomPaint(
+                          painter: SphereMapPainter(
+                            nodes: _nodes,
+                            currentZone: widget.currentZone,
+                            selectedZone: _selectedZone,
+                            highlightedDestination: _destinationZone,
+                            currentDay: _currentDay,
+                            angleX: _angleX,
+                            angleY: _angleY,
+                            scale: _scale,
+                            merchantZones: _merchantZones,
+                            merchantAnimValue: _merchantAnimCtrl.value,
+                          ),
+                          size: Size(
+                            constraints.maxWidth,
+                            constraints.maxHeight,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                // ── Center/Recenter button (left side) ──
+                Positioned(
+                  left: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: _recenterToCurrentNode,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.cyanAccent.withValues(alpha: 0.5),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.cyanAccent.withValues(alpha: 0.2),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.my_location,
+                          color: Colors.cyanAccent,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Zoom slider (bottom) ──
+                Positioned(
+                  left: 48,
+                  right: 48,
+                  bottom: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.cyanAccent.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.zoom_out,
+                          color: Colors.cyanAccent,
+                          size: 14,
+                        ),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderThemeData(
+                              activeTrackColor: Colors.cyanAccent,
+                              inactiveTrackColor: Colors.cyanAccent.withValues(
+                                alpha: 0.2,
+                              ),
+                              thumbColor: Colors.cyanAccent,
+                              thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 6,
+                              ),
+                              overlayShape: const RoundSliderOverlayShape(
+                                overlayRadius: 12,
+                              ),
+                              trackHeight: 2,
+                              overlayColor: Colors.cyanAccent.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
+                            child: Slider(
+                              value: _scale,
+                              min: 0.5,
+                              max: 2.5,
+                              onChanged: (val) {
+                                setState(() {
+                                  _scale = val;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.zoom_in,
+                          color: Colors.cyanAccent,
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Adjacent Node Buttons ──
+          Expanded(flex: 2, child: _buildAdjacentNodeList()),
+
+          // ── Confirm / Back buttons ──
+          _buildTravelConfirmBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSphereHeader(Zone currentZoneData, int hours) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF111522),
         border: Border(
@@ -1280,7 +1502,7 @@ class _TravelScreenState extends State<TravelScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.location_on, color: currentZoneData.color, size: 18),
+          Icon(Icons.location_on, color: currentZoneData.color, size: 16),
           const SizedBox(width: 6),
           Expanded(
             child: Column(
@@ -1290,17 +1512,43 @@ class _TravelScreenState extends State<TravelScreen> {
                   currentZoneData.name.toUpperCase(),
                   style: TextStyle(
                     color: currentZoneData.color,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1,
                   ),
                 ),
                 Text(
                   'DAY $_currentDay  ·  $hours:00',
                   style: const TextStyle(
                     color: Colors.white54,
-                    fontSize: 11,
-                    letterSpacing: 0.8,
+                    fontSize: 10,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.cyanAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: Colors.cyanAccent.withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.touch_app, color: Colors.cyanAccent, size: 10),
+                SizedBox(width: 3),
+                Text(
+                  'DRAG TO ROTATE',
+                  style: TextStyle(
+                    color: Colors.cyanAccent,
+                    fontSize: 7,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
                   ),
                 ),
               ],
@@ -1311,329 +1559,254 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // PANNABLE MAP
-  // ═════════════════════════════════════════════════════════════════════════
-  Widget _buildPannableMap() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const nodeRadius = 20.0;
+  Widget _buildAdjacentNodeList() {
+    final adjacent = _adjacentZones;
+    final currentZoneData = Zone.worldMap[widget.currentZone]!;
 
-        return Stack(
-          children: [
-            ClipRRect(
-              key: _mapAreaKey,
-              borderRadius: BorderRadius.circular(8),
-              child: InteractiveViewer(
-                transformationController: _mapTransformController,
-                constrained: false,
-                minScale: 0.2,
-                maxScale: 3.0,
-                boundaryMargin: const EdgeInsets.all(2000),
-                child: SizedBox(
-                  width: _worldSize,
-                  height: _worldSize,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        width: _worldSize,
-                        height: _worldSize,
-                        child: CustomPaint(
-                          painter: _ConnectionPainter(
-                            nodePositions: _worldPositions,
-                            currentDay: _currentDay,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Section header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.explore, color: currentZoneData.color, size: 12),
+              const SizedBox(width: 4),
+              Text(
+                'ADJACENT SECTORS',
+                style: TextStyle(
+                  color: currentZoneData.color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${adjacent.length} available',
+                style: const TextStyle(color: Colors.white38, fontSize: 9),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: Colors.white10),
+
+        // Scrollable adjacent zone buttons
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            itemCount: adjacent.length,
+            separatorBuilder: (_, i) => const SizedBox(height: 3),
+            itemBuilder: (context, index) {
+              final zoneType = adjacent[index];
+              final zone = Zone.worldMap[zoneType]!;
+              final isDestination = _destinationZone == zoneType;
+              return SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDestination
+                        ? Colors.amberAccent.withValues(alpha: 0.2)
+                        : zone.color.withValues(alpha: 0.1),
+                    foregroundColor: isDestination
+                        ? Colors.amberAccent
+                        : Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: isDestination
+                            ? Colors.amberAccent
+                            : zone.color.withValues(alpha: 0.35),
+                        width: isDestination ? 1.5 : 1,
+                      ),
+                    ),
+                    elevation: isDestination ? 2 : 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: Icon(zone.icon, color: zone.color, size: 14),
+                  label: Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          zone.name.toUpperCase(),
+                          style: TextStyle(
+                            color: isDestination
+                                ? Colors.amberAccent
+                                : Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          zone.isSettlement ? 'Settlement' : 'Dungeon',
+                          style: TextStyle(
+                            color: zone.color.withValues(alpha: 0.7),
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      for (final entry in Zone.worldMap.entries)
-                        _buildNodeWidget(entry.value, nodeRadius),
-                      if (widget.merchantManager != null)
-                        for (final merchant
-                            in widget.merchantManager!.merchants)
-                          _buildMerchantIndicator(merchant),
-                    ],
+                      ],
+                    ),
                   ),
+                  onPressed: () => _selectAdjacentZone(zoneType),
                 ),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: GestureDetector(
-                onTap: _centerOnPlayer,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111522).withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white24),
-                  ),
-                  child: const Icon(
-                    Icons.center_focus_strong,
-                    color: Colors.white54,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildMerchantIndicator(TravelingMerchant merchant) {
-    final nodePos = _worldPositions[merchant.currentZone];
-    if (nodePos == null) return const SizedBox.shrink();
+  Widget _buildTravelConfirmBar() {
+    final hasDestination = _destinationZone != null;
+    final destZone = hasDestination ? Zone.worldMap[_destinationZone!] : null;
+    final canTravel = hasDestination && destZone != null;
 
-    final isPlayerHere = widget.currentZone == merchant.currentZone;
-    final isAdj = _isAdjacent(widget.currentZone, merchant.currentZone);
-
-    if (!isPlayerHere && !isAdj) return const SizedBox.shrink();
-
-    return Positioned(
-      left: nodePos.dx - 8,
-      top: nodePos.dy - 32,
-      child: GestureDetector(
-        onTap: isPlayerHere
-            ? () => _openMerchantShop(merchant)
-            : () {
-                showStylishPopup(
-                  context,
-                  title: '???',
-                  message: 'Unknown',
-                  icon: Icons.help_outline,
-                  iconColor: Colors.grey,
-                );
-              },
-        child: Container(
-          padding: isPlayerHere
-              ? const EdgeInsets.symmetric(horizontal: 5, vertical: 2)
-              : const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          decoration: BoxDecoration(
-            color: isPlayerHere
-                ? (merchant.type == MerchantType.legendary
-                      ? GameColors.gold.withValues(alpha: 0.9)
-                      : Colors.tealAccent.withValues(alpha: 0.8))
-                : Colors.grey.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(isPlayerHere ? 5 : 12),
-            boxShadow: isPlayerHere
-                ? [
-                    BoxShadow(
-                      color:
-                          (merchant.type == MerchantType.legendary
-                                  ? GameColors.gold
-                                  : Colors.tealAccent)
-                              .withValues(alpha: 0.6),
-                      blurRadius: 8,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            isPlayerHere ? '${merchant.type.icon} ${merchant.type.label}' : '?',
-            style: TextStyle(
-              fontSize: isPlayerHere ? 7 : 16,
-              fontWeight: FontWeight.w900,
-              color: isPlayerHere
-                  ? (merchant.type == MerchantType.legendary
-                        ? Colors.black
-                        : Colors.black87)
-                  : Colors.grey[300],
-            ),
-          ),
-        ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+      decoration: const BoxDecoration(
+        color: Color(0xFF111522),
+        border: Border(top: BorderSide(color: Colors.white10)),
       ),
-    );
-  }
-
-  Widget _buildNodeWidget(Zone zone, double radius) {
-    final pos = _worldPositions[zone.type]!;
-    final isCurrent = zone.type == widget.currentZone;
-    final isSelected = zone.type == _selectedZone;
-    final unlocked = zone.isUnlocked(_currentDay);
-    final adjacent = _isAdjacent(widget.currentZone, zone.type);
-    final canInteract = unlocked && (isCurrent || adjacent);
-
-    final Color borderColor;
-    final double borderWidth;
-    final Color bgColor;
-    final double scale;
-
-    if (isCurrent) {
-      borderColor = zone.color;
-      borderWidth = 2.5;
-      bgColor = zone.color.withValues(alpha: 0.18);
-      scale = 1.1;
-    } else if (isSelected && canInteract) {
-      borderColor = Colors.cyanAccent;
-      borderWidth = 2.5;
-      bgColor = Colors.cyanAccent.withValues(alpha: 0.12);
-      scale = 1.05;
-    } else if (!unlocked) {
-      borderColor = Colors.grey.withValues(alpha: 0.25);
-      borderWidth = 1.5;
-      bgColor = const Color(0xFF1A1D2A);
-      scale = 0.9;
-    } else if (adjacent) {
-      borderColor = zone.color.withValues(alpha: 0.55);
-      borderWidth = 1.5;
-      bgColor = zone.color.withValues(alpha: 0.08);
-      scale = 1.0;
-    } else {
-      borderColor = Colors.grey.withValues(alpha: 0.15);
-      borderWidth = 1.0;
-      bgColor = const Color(0xFF151828);
-      scale = 0.85;
-    }
-
-    final node = GestureDetector(
-      onTap: () => _selectZone(zone.type),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        width: radius * 2 * scale,
-        height: radius * 2 * scale,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: bgColor,
-          border: Border.all(color: borderColor, width: borderWidth),
-          boxShadow: (isCurrent || isSelected)
-              ? [
-                  BoxShadow(
-                    color: (isCurrent ? zone.color : Colors.cyanAccent)
-                        .withValues(alpha: 0.3),
-                    blurRadius: 14,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : null,
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              unlocked ? zone.icon : Icons.lock_outline,
-              color: unlocked
-                  ? (isCurrent ? zone.color : zone.color.withValues(alpha: 0.8))
-                  : Colors.grey.withValues(alpha: 0.4),
-              size: radius * 0.75,
-            ),
-            if (isCurrent)
-              Positioned(
-                top: -8,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Transform.rotate(
-                    angle: pi / 4,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: zone.color,
-                        border: Border.all(color: Colors.black, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: zone.color.withValues(alpha: 0.6),
-                            blurRadius: 6,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (!unlocked)
-              Positioned(
-                bottom: -1,
-                right: -1,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1D2A),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: Colors.grey.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Text(
-                    'D${zone.unlockDay}',
-                    style: TextStyle(
-                      color: Colors.grey.withValues(alpha: 0.6),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-
-    Widget finalNode = isCurrent ? _PulseAnimation(child: node) : node;
-
-    return Positioned(
-      left: pos.dx - radius * scale,
-      top: pos.dy - radius * scale,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          finalNode,
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A0E1A).withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              zone.name,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: isCurrent
-                    ? zone.color
-                    : unlocked
-                    ? Colors.white70
-                    : Colors.grey.withValues(alpha: 0.5),
-                letterSpacing: 0.4,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          if (isCurrent)
+          // Destination info
+          if (hasDestination && destZone != null)
             Container(
-              margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: zone.color.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(3),
-                border: Border.all(color: zone.color.withValues(alpha: 0.5)),
-              ),
-              child: Text(
-                'YOU ARE HERE',
-                style: TextStyle(
-                  fontSize: 6.5,
-                  fontWeight: FontWeight.w800,
-                  color: zone.color,
-                  letterSpacing: 0.8,
+                color: Colors.amberAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: Colors.amberAccent.withValues(alpha: 0.3),
                 ),
               ),
+              child: Row(
+                children: [
+                  Icon(destZone.icon, color: Colors.amberAccent, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Heading to ${destZone.name}',
+                      style: const TextStyle(
+                        color: Colors.amberAccent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _clearDestination,
+                    child: Icon(
+                      Icons.close,
+                      color: Colors.amberAccent.withValues(alpha: 0.6),
+                      size: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
+
+          // Buttons row
+          Row(
+            children: [
+              // Back button
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white54,
+                      side: const BorderSide(color: Colors.white24),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 12),
+                    label: const Text(
+                      'BACK',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    onPressed: widget.onCancel,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 6),
+
+              // Confirm travel button
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 34,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canTravel
+                          ? Colors.amberAccent
+                          : Colors.grey[800]!,
+                      foregroundColor: canTravel
+                          ? Colors.black
+                          : Colors.grey[600]!,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: canTravel ? 2 : 0,
+                    ),
+                    icon: Icon(
+                      Icons.flight_takeoff,
+                      size: 14,
+                      color: canTravel ? Colors.black : Colors.grey[600],
+                    ),
+                    label: Text(
+                      canTravel
+                          ? 'TRAVEL TO ${destZone.name.toUpperCase()}'
+                          : 'SELECT DESTINATION',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10,
+                        letterSpacing: 0.6,
+                        color: canTravel ? Colors.black : Colors.grey[600],
+                      ),
+                    ),
+                    onPressed: canTravel ? _confirmTravel : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // ACTION PANEL
-  // ═════════════════════════════════════════════════════════════════════════
-  Widget _buildActionPanel(Zone currentZoneData, Zone? selectedZoneData) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RIGHT/BOTTOM PANEL: Zone Info + Action Buttons
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildActionPanel(Zone currentZoneData, int hours) {
+    final isSettlement = currentZoneData.isSettlement;
+    final merchantsHere = widget.merchantManager != null
+        ? widget.merchantManager!.getMerchantsAt(widget.currentZone)
+        : <TravelingMerchant>[];
+    final npcsHere = widget.npcManager != null
+        ? widget.npcManager!.getNPCsAt(widget.currentZone)
+        : <TravelingNPC>[];
+    final hasGleedAccess = isSettlement || npcsHere.isNotEmpty;
+    final zoneHints = _getZoneSpecificHints(widget.currentZone);
+    final hint = zoneHints[hashCode.abs() % zoneHints.length];
+
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF111522),
@@ -1641,72 +1814,244 @@ class _TravelScreenState extends State<TravelScreen> {
       ),
       child: Column(
         children: [
+          // ── Boss / Hyper Boss Warnings ──
           if (_hyperBossTomorrow) _buildHyperBossWarning(),
           if (_hasBossAvailable) _buildBossAlert(),
 
-          // Panel header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Icon(
-                  selectedZoneData != null
-                      ? Icons.info_outline
-                      : Icons.touch_app,
-                  color: Colors.white38,
-                  size: 14,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    selectedZoneData != null
-                        ? selectedZoneData.name.toUpperCase()
-                        : 'SELECT A NODE',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
+          // ── Scrollable content ──
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Node image
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      height: 400,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: currentZoneData.color.withValues(alpha: 0.3),
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Image.asset(
+                        currentZoneData.imageAsset,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: currentZoneData.color.withValues(alpha: 0.1),
+                          child: Icon(
+                            currentZoneData.icon,
+                            color: currentZoneData.color,
+                            size: 40,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                if (widget.merchantManager != null)
-                  _buildCurrentZoneMerchantButton(),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Colors.white10),
+                  const SizedBox(height: 10),
 
-          Expanded(
-            child: selectedZoneData != null
-                ? _buildSelectedNodePanel(selectedZoneData)
-                : _buildDefaultZonePanel(currentZoneData),
-          ),
+                  // Zone name + description
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: currentZoneData.color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: currentZoneData.color.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              currentZoneData.icon,
+                              color: currentZoneData.color,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                currentZoneData.name.toUpperCase(),
+                                style: TextStyle(
+                                  color: currentZoneData.color,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                            if (currentZoneData.isSettlement)
+                              _badge('SETTLEMENT', Colors.tealAccent),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          currentZoneData.description,
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 11,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '"$hint"',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
 
-          // Back button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: SizedBox(
-              width: double.infinity,
-              height: 36,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white54,
-                  side: BorderSide(color: Colors.white24),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  // ── ACTIONS header ──
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.touch_app,
+                        color: currentZoneData.color,
+                        size: 12,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'ACTIONS',
+                        style: TextStyle(
+                          color: currentZoneData.color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                icon: const Icon(Icons.arrow_back_ios_new, size: 14),
-                label: const Text(
-                  'BACK',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
+                  const SizedBox(height: 6),
+
+                  // ── Scout / Explore button ──
+                  _buildActionButton(
+                    label: 'SCOUT AREA',
+                    icon: Icons.search,
+                    color: Colors.red[900]!,
+                    onPressed: () => _handleLocalAction('explore'),
                   ),
-                ),
-                onPressed: widget.onCancel,
+                  const SizedBox(height: 6),
+
+                  // ── Camp button ──
+                  _buildActionButton(
+                    label: 'CAMP',
+                    icon: Icons.campaign,
+                    color: Colors.teal[800]!,
+                    onPressed: _showCampDurationPicker,
+                  ),
+
+                  // ── Gleed's Den ──
+                  if (hasGleedAccess) ...[
+                    const SizedBox(height: 6),
+                    _buildActionButton(
+                      label: "GLEED'S DEN",
+                      icon: Icons.casino,
+                      color: Colors.amber[900]!,
+                      onPressed: _showGleedDen,
+                    ),
+                  ],
+
+                  // ── Shop ──
+                  if (isSettlement || merchantsHere.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _buildActionButton(
+                      label: merchantsHere.isNotEmpty
+                          ? 'SHOP (${merchantsHere.length} merchant${merchantsHere.length > 1 ? "s" : ""})'
+                          : 'SHOP',
+                      icon: Icons.store,
+                      color: Colors.orange[900]!,
+                      onPressed: () {
+                        if (merchantsHere.isNotEmpty) {
+                          if (merchantsHere.length == 1) {
+                            _openMerchantShop(merchantsHere.first);
+                          } else {
+                            _showMerchantSelection(merchantsHere);
+                          }
+                        } else {
+                          _handleLocalAction('shop');
+                        }
+                      },
+                    ),
+                  ],
+
+                  // ── Rest + NPC (settlement only) ──
+                  if (isSettlement) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 38,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.greenAccent,
+                                side: BorderSide(
+                                  color: Colors.greenAccent.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              icon: const Icon(Icons.bed, size: 14),
+                              label: const Text(
+                                'REST (10c)',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              onPressed: widget.player.credits >= 10
+                                  ? () => _handleLocalAction('rest')
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: SizedBox(
+                            height: 38,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.lightBlueAccent,
+                                side: BorderSide(
+                                  color: Colors.lightBlueAccent.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              icon: const Icon(Icons.chat, size: 14),
+                              label: const Text(
+                                'NPC',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              onPressed: () => _handleLocalAction('npc'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                ],
               ),
             ),
           ),
@@ -1715,10 +2060,43 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
+  Widget _buildActionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      height: 40,
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 0,
+        ),
+        icon: Icon(icon, size: 16),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 11,
+            letterSpacing: 0.8,
+          ),
+        ),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BOSS WARNINGS
+  // ═══════════════════════════════════════════════════════════════════════════
   Widget _buildHyperBossWarning() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -1726,141 +2104,36 @@ class _TravelScreenState extends State<TravelScreen> {
             Colors.red.withValues(alpha: 0.15),
           ],
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.deepOrangeAccent),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.deepOrange.withValues(alpha: 0.3),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
       ),
       child: const Row(
         children: [
-          Icon(Icons.warning_amber, color: Colors.deepOrangeAccent, size: 24),
-          SizedBox(width: 10),
+          Icon(Icons.warning_amber, color: Colors.deepOrangeAccent, size: 18),
+          SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '⚠️ HYPER BOSS INCOMING — TOMORROW',
+                  '⚠️ HYPER BOSS — TOMORROW',
                   style: TextStyle(
                     color: Colors.deepOrangeAccent,
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
+                    letterSpacing: 0.6,
                   ),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: 1),
                 Text(
-                  'Prepare your loadout. Retreat will not be an option.',
-                  style: TextStyle(color: Colors.white60, fontSize: 9),
+                  'Prepare your loadout.',
+                  style: TextStyle(color: Colors.white60, fontSize: 8),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentZoneMerchantButton() {
-    final merchantsHere = widget.merchantManager!.getMerchantsAt(
-      widget.currentZone,
-    );
-    if (merchantsHere.isEmpty) return const SizedBox.shrink();
-
-    return GestureDetector(
-      onTap: () {
-        if (merchantsHere.length == 1) {
-          _openMerchantShop(merchantsHere.first);
-        } else {
-          _showMerchantSelection(merchantsHere);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.tealAccent.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🛒 ', style: TextStyle(fontSize: 10)),
-            Text(
-              'SHOP (${merchantsHere.length})',
-              style: const TextStyle(
-                color: Colors.tealAccent,
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showMerchantSelection(List<TravelingMerchant> merchants) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF111522),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            const Text(
-              'MERCHANTS IN AREA',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ...merchants.map(
-              (m) => ListTile(
-                leading: Text(
-                  m.type.icon,
-                  style: const TextStyle(fontSize: 24),
-                ),
-                title: Text(
-                  m.type.label,
-                  style: TextStyle(
-                    color: m.type == MerchantType.legendary
-                        ? GameColors.gold
-                        : Colors.tealAccent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  m.type.description,
-                  style: const TextStyle(color: Colors.white38, fontSize: 11),
-                ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                  color: Colors.white38,
-                ),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _openMerchantShop(m);
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
       ),
     );
   }
@@ -1872,8 +2145,8 @@ class _TravelScreenState extends State<TravelScreen> {
     return GestureDetector(
       onTap: _challengeWeeklyBoss,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-        padding: const EdgeInsets.all(10),
+        margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -1881,31 +2154,24 @@ class _TravelScreenState extends State<TravelScreen> {
               Colors.deepOrange.withValues(alpha: 0.15),
             ],
           ),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: GameColors.gold.withValues(alpha: 0.6)),
-          boxShadow: [
-            BoxShadow(
-              color: GameColors.gold.withValues(alpha: 0.2),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: GameColors.gold.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: const Icon(
                 Icons.psychology,
                 color: GameColors.gold,
-                size: 24,
+                size: 18,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1915,31 +2181,30 @@ class _TravelScreenState extends State<TravelScreen> {
                     '⚠️ WEEKLY BOSS: ${boss.name}',
                     style: const TextStyle(
                       color: GameColors.gold,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
+                      letterSpacing: 0.6,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
-                    '${boss.attackType.icon} ${boss.attackType.label} · '
-                    'Immune: ${boss.immunities.map((d) => d.icon).join(" ")}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 9),
+                    '${boss.attackType.icon} ${boss.attackType.label}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 8),
                   ),
                 ],
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
                 color: GameColors.gold,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
                 'FIGHT',
                 style: TextStyle(
                   color: Colors.black,
-                  fontSize: 10,
+                  fontSize: 8,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1,
                 ),
@@ -1951,228 +2216,12 @@ class _TravelScreenState extends State<TravelScreen> {
     );
   }
 
-  Widget _buildSelectedNodePanel(Zone zone) {
-    final isCurrent = zone.type == widget.currentZone;
-    final adjacent = _isAdjacent(widget.currentZone, zone.type);
-    final unlocked = zone.isUnlocked(_currentDay);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            zone.description,
-            style: const TextStyle(
-              color: Colors.white60,
-              fontSize: 11,
-              height: 1.3,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const Spacer(),
-          Row(
-            children: [
-              if (isCurrent) _badge('CURRENT', zone.color),
-              if (adjacent && !isCurrent) _badge('ADJACENT', Colors.cyanAccent),
-              if (!adjacent && !isCurrent)
-                _badge('NOT ADJACENT', Colors.orangeAccent),
-              const Spacer(),
-              const Text(
-                '2h travel',
-                style: TextStyle(color: Colors.white38, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Show zone-specific label for selected node
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: GameColors.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: GameColors.border),
-            ),
-            child: Text(
-              isCurrent
-                  ? 'You are currently in ${zone.name}.'
-                  : 'Tap "TRAVEL" to move to ${zone.name}.',
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          if (isCurrent)
-            // Show action button for current zone
-            SizedBox(
-              height: 44,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: zone.color.withValues(alpha: 0.85),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.touch_app, size: 18),
-                label: Text(
-                  'ACTION — ${zone.name.toUpperCase()}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                onPressed: _showActionPopup,
-              ),
-            )
-          else if (adjacent && unlocked)
-            SizedBox(
-              height: 44,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: zone.color.withValues(alpha: 0.85),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.flight_takeoff, size: 18),
-                label: Text(
-                  'TRAVEL TO ${zone.name.toUpperCase()}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                onPressed: _travelToZone,
-              ),
-            )
-          else if (!unlocked)
-            SizedBox(
-              height: 44,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.grey,
-                  side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                icon: const Icon(Icons.lock, size: 16),
-                label: Text(
-                  'UNLOCKS ON DAY ${zone.unlockDay}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                onPressed: null,
-              ),
-            )
-          else
-            SizedBox(
-              height: 44,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orangeAccent,
-                  side: BorderSide(
-                    color: Colors.orangeAccent.withValues(alpha: 0.3),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                icon: const Icon(Icons.route, size: 16),
-                label: const Text(
-                  'NO DIRECT ROUTE',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                onPressed: null,
-              ),
-            ),
-          const SizedBox(height: 6),
-        ],
-      ),
-    );
-  }
-
-  /// Default panel when no zone is selected — shows ACTION button for current zone
-  Widget _buildDefaultZonePanel(Zone zone) {
-    final zoneHints = _getZoneSpecificHints(widget.currentZone);
-    final hint = zoneHints[hashCode.abs() % zoneHints.length];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Zone description
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: GameColors.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: GameColors.border),
-            ),
-            child: Text(
-              hint,
-              style: const TextStyle(
-                color: Colors.white60,
-                fontSize: 11,
-                height: 1.3,
-                fontStyle: FontStyle.italic,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const Spacer(),
-
-          // ACTION BUTTON
-          SizedBox(
-            height: 50,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: zone.color,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                elevation: 2,
-              ),
-              icon: const Icon(Icons.touch_app, size: 22),
-              label: Text(
-                'ACTION — ${zone.name.toUpperCase()}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                  letterSpacing: 1,
-                ),
-              ),
-              onPressed: _showActionPopup,
-            ),
-          ),
-          const SizedBox(height: 6),
-        ],
-      ),
-    );
-  }
-
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════════════════════════════════
   Widget _badge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
@@ -2182,9 +2231,9 @@ class _TravelScreenState extends State<TravelScreen> {
         text,
         style: TextStyle(
           color: color,
-          fontSize: 9,
+          fontSize: 8,
           fontWeight: FontWeight.w800,
-          letterSpacing: 0.8,
+          letterSpacing: 0.6,
         ),
       ),
     );

@@ -17,7 +17,6 @@ enum ZoneType {
   volcano,
   tower,
   abyss,
-  // ── NEW ZONES ──
   neonBazaar,
   crystalMines,
   quantumRift,
@@ -33,30 +32,33 @@ enum ZoneType {
   plasmaFields,
   obsidianSpire,
   voidGate,
-  // ── TIER 1 NEW SETTLEMENTS ──
   ironHarbor,
   chromeSpire,
   neonOasis,
   blackMarketHub,
   skyDock,
-  // ── TIER 2 NEW MAIN-PATH DUNGEONS ──
   scorchedPipeline,
   rustCanyon,
   dataTorrent,
   decayedGrid,
   shatteredCore,
-  // ── TIER 3 NEW OFF-BEATEN DUNGEONS ──
   forgottenServer,
   acidSprawl,
   hollowNetwork,
   staticRift,
   deadSignal,
-  // ── TIER 4 NEW ENDGAME ZONES ──
   entropyWell,
   chromeLabyrinth,
   voidNexus,
   deepSpire,
   quantumSea,
+  tachyonFaultline,
+  resonanceFault,
+  sanguineConduit,
+  phasmMirage,
+  zeroGVault,
+  cryoCompileCrypt,
+  highForgeMatrix,
 }
 
 class Zone {
@@ -64,21 +66,11 @@ class Zone {
   final String name;
   final String description;
   final List<ZoneType> connections;
-
-  /// Relative position on the node map (0.0 – 1.0).
   final Offset mapPosition;
-
-  /// Material icon shown on the node.
   final IconData icon;
-
-  /// Accent color for the node and connection glow.
   final Color color;
-
-  /// Minimum day required to unlock this zone (0 = always unlocked).
-  final int unlockDay;
-
-  /// Whether this zone is a settlement (has shop, rest, NPC actions).
   final bool isSettlement;
+  final String imageAsset;
 
   const Zone({
     required this.type,
@@ -88,520 +80,506 @@ class Zone {
     required this.mapPosition,
     required this.icon,
     required this.color,
-    this.unlockDay = 0,
     this.isSettlement = false,
+    required this.imageAsset,
   });
 
-  /// Whether the zone is unlocked for a given current day.
-  bool isUnlocked(int currentDay) => currentDay >= unlockDay;
-
-  /// World map with overhauled progression.
-  ///
-  /// **Layout philosophy:**
-  /// - Town is the starting hub. Two easy paths branch out (Forest / Wasteland).
-  /// - After 1–2 nodes you reach a settlement (Ruins, then Citadel) for resupply.
-  /// - Dungeons sit on dead-end branches off the beaten path.
-  /// - Abyss is the final zone, only reachable from Volcano.
   static Map<ZoneType, Zone> get worldMap => {
-    // ══════════════════════════════════════════════════════════════════════
-    //  SETTLEMENTS (shop / rest / NPC)
-    // ══════════════════════════════════════════════════════════════════════
     ZoneType.town: const Zone(
       type: ZoneType.town,
       name: "Data-Town Hub",
       description:
-          "The starting settlement. Neon-lit terminals hum with trade, "
-          "merchant nodes offer high-grade firmware, and rest terminals "
-          "provide sanctuary for weary runners.",
+          "The starting settlement. Neon-lit terminals hum with trade, merchant nodes offer high-grade firmware, and rest terminals provide sanctuary for weary runners.",
       connections: [ZoneType.forest, ZoneType.wasteland],
-      mapPosition: Offset(0.50, 0.90),
+      mapPosition: Offset(0.50, 0.88),
       icon: Icons.account_balance,
       color: Color(0xFF00E676),
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Data_Town_Hub.png',
     ),
     ZoneType.ruins: const Zone(
       type: ZoneType.ruins,
       name: "Rusthaven Outpost",
       description:
-          "A fortified settlement built within crumbling data-temples. "
-          "Merchants trade salvaged artifacts while guards patrol the "
-          "ancient holographic walls.",
+          "A fortified settlement built within crumbling data-temples. Merchants trade salvaged artifacts while guards patrol the ancient holographic walls.",
       connections: [ZoneType.wasteland, ZoneType.graveyard, ZoneType.desert],
-      mapPosition: Offset(0.42, 0.62),
+      mapPosition: Offset(0.50, 0.52),
       icon: Icons.account_balance,
       color: Color(0xFF8D6E63),
-      unlockDay: 1,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Rusthaven_Outpost.png',
     ),
     ZoneType.citadel: const Zone(
       type: ZoneType.citadel,
       name: "Apex Citadel",
       description:
-          "A monolithic spire of obsidian glass piercing the upper "
-          "atmosphere. Advanced sentinels guard the last great settlement "
-          "before the deep zones.",
+          "A monolithic spire of obsidian glass piercing the upper atmosphere. Advanced sentinels guard the last great settlement before the deep zones.",
       connections: [ZoneType.graveyard, ZoneType.volcano, ZoneType.ocean],
-      mapPosition: Offset(0.42, 0.22),
+      mapPosition: Offset(0.38, 0.34),
       icon: Icons.dns,
       color: Color(0xFFFFD600),
-      unlockDay: 4,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Apex_Citadel.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  MAIN-PATH DUNGEONS (on the highway between settlements)
-    // ══════════════════════════════════════════════════════════════════════
     ZoneType.forest: const Zone(
       type: ZoneType.forest,
       name: "Binary Brush",
       description:
-          "Thick fractal foliage pulsing with erratic energy. Rogue "
-          "logic-vines tangle through a canopy of shimmering data-leaves.",
+          "Thick fractal foliage pulsing with erratic energy. Rogue logic-vines tangle through a canopy of shimmering data-leaves.",
       connections: [
         ZoneType.town,
         ZoneType.deepCaves,
         ZoneType.graveyard,
         ZoneType.neuralGarden,
+        ZoneType.dataTorrent,
+        ZoneType.neonOasis,
       ],
-      mapPosition: Offset(0.28, 0.75),
+      mapPosition: Offset(0.25, 0.82),
       icon: Icons.forest,
       color: Color(0xFF66BB6A),
-      unlockDay: 0,
+      imageAsset: 'assets/images/nodes/Binary_Brush.png',
     ),
     ZoneType.wasteland: const Zone(
       type: ZoneType.wasteland,
       name: "The Static Wasteland",
       description:
-          "An endless horizon of white noise and scorched silicon. "
-          "Electrical storms of pure interference scour the landscape.",
-      connections: [ZoneType.town, ZoneType.ruins, ZoneType.swamp],
-      mapPosition: Offset(0.72, 0.75),
+          "An endless horizon of white noise and scorched silicon. Electrical storms of pure interference scour the landscape.",
+      connections: [
+        ZoneType.town,
+        ZoneType.ruins,
+        ZoneType.swamp,
+        ZoneType.neonBazaar,
+        ZoneType.staticRift,
+        ZoneType.ironHarbor,
+      ],
+      mapPosition: Offset(0.75, 0.82),
       icon: Icons.broken_image,
       color: Color(0xFFFF7043),
-      unlockDay: 0,
+      imageAsset: 'assets/images/nodes/The_Static_Wasteland.png',
     ),
     ZoneType.graveyard: const Zone(
       type: ZoneType.graveyard,
       name: "Tech-Graveyard",
       description:
-          "Skeletal remains of obsolete megastructures tower over piles "
-          "of discarded hardware. Ghostly subroutines haunt the rusted circuits.",
+          "Skeletal remains of obsolete megastructures tower over piles of discarded hardware. Ghostly subroutines haunt the rusted circuits.",
       connections: [
         ZoneType.forest,
         ZoneType.ruins,
         ZoneType.citadel,
         ZoneType.ocean,
+        ZoneType.decayedGrid,
+        ZoneType.ghostTerminal,
       ],
-      mapPosition: Offset(0.42, 0.42),
+      mapPosition: Offset(0.38, 0.48),
       icon: Icons.warning_amber,
       color: Color(0xFFEF5350),
-      unlockDay: 2,
+      imageAsset: 'assets/images/nodes/Tech_Graveyard.png',
     ),
     ZoneType.volcano: const Zone(
       type: ZoneType.volcano,
       name: "Core Meltdown",
       description:
-          "A volcanic fissure where raw processing power erupts from the "
-          "planet's digital core. The heat corrupts all but the strongest code.",
+          "A volcanic fissure where raw processing power erupts from the planet's digital core. The heat corrupts all but the strongest code.",
       connections: [ZoneType.citadel, ZoneType.abyss, ZoneType.solarForge],
-      mapPosition: Offset(0.42, 0.10),
+      mapPosition: Offset(0.48, 0.14),
       icon: Icons.local_fire_department,
       color: Color(0xFFFF3D00),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/Core_Meltdown.png',
     ),
     ZoneType.abyss: const Zone(
       type: ZoneType.abyss,
       name: "The Digital Abyss",
       description:
-          "The deepest layer of the Ring's architecture. Absolute darkness "
-          "where reality itself begins to unravel. Only the most prepared survive.",
-      connections: [ZoneType.volcano, ZoneType.quantumRift],
-      mapPosition: Offset(0.42, 0.02),
+          "The deepest layer of the Ring's architecture. Absolute darkness where reality itself begins to unravel. Only the most prepared survive.",
+      connections: [
+        ZoneType.volcano,
+        ZoneType.quantumRift,
+        ZoneType.voidNexus,
+        ZoneType.shatteredCore,
+      ],
+      mapPosition: Offset(0.52, 0.11),
       icon: Icons.all_inclusive,
       color: Color(0xFF1A237E),
-      unlockDay: 7,
+      imageAsset: 'assets/images/nodes/The_Digital_Abyss.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  OFF-BEATEN-PATH DUNGEONS (dead-end branches requiring detours)
-    // ══════════════════════════════════════════════════════════════════════
-
-    // ── Left branch: DeepCaves → Mountain → Library → Tower ──
     ZoneType.deepCaves: const Zone(
       type: ZoneType.deepCaves,
       name: "Deep Memory Caves",
       description:
-          "Subterranean archives echoing with deleted history. Corrupted "
-          "data-stalactites drip liquid processing power into dark pools.",
+          "Subterranean archives echoing with deleted history. Corrupted data-stalactites drip liquid processing power into dark pools.",
       connections: [ZoneType.forest, ZoneType.mountain, ZoneType.crystalMines],
-      mapPosition: Offset(0.12, 0.58),
+      mapPosition: Offset(0.15, 0.68),
       icon: Icons.terrain,
       color: Color(0xFF7E57C2),
-      unlockDay: 1,
+      imageAsset: 'assets/images/nodes/Deep_Memory_Caves.png',
     ),
     ZoneType.mountain: const Zone(
       type: ZoneType.mountain,
       name: "Frozen Peak",
       description:
-          "A towering glacier of compressed data blocks. The extreme cold "
-          "crystallizes unprotected code, creating beauty and peril.",
+          "A towering glacier of compressed data blocks. The extreme cold crystallizes unprotected code, creating beauty and peril.",
       connections: [ZoneType.deepCaves, ZoneType.library, ZoneType.echoCaverns],
-      mapPosition: Offset(0.08, 0.38),
+      mapPosition: Offset(0.10, 0.38),
       icon: Icons.terrain,
       color: Color(0xFF42A5F5),
-      unlockDay: 3,
+      imageAsset: 'assets/images/nodes/Frozen_Peak.png',
     ),
     ZoneType.library: const Zone(
       type: ZoneType.library,
       name: "The Infinite Library",
       description:
-          "Endless shelves of encoded knowledge stretch into impossible "
-          "geometries. Ancient algorithms whisper forgotten truths.",
-      connections: [ZoneType.mountain, ZoneType.tower],
-      mapPosition: Offset(0.06, 0.18),
+          "Endless shelves of encoded knowledge stretch into impossible geometries. Ancient algorithms whisper forgotten truths.",
+      connections: [
+        ZoneType.mountain,
+        ZoneType.tower,
+        ZoneType.dataNexus,
+        ZoneType.forgottenServer,
+      ],
+      mapPosition: Offset(0.08, 0.28),
       icon: Icons.menu_book,
       color: Color(0xFF5C6BC0),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/The_Infinite_Library.png',
     ),
     ZoneType.tower: const Zone(
       type: ZoneType.tower,
       name: "Signal Tower",
       description:
-          "A relay station that once broadcast control signals across the "
-          "entire Ring. Electromagnetic pulses still crackle along its antennae.",
-      connections: [ZoneType.library, ZoneType.ocean, ZoneType.chromeDocks],
-      mapPosition: Offset(0.08, 0.05),
+          "A relay station that once broadcast control signals across the entire Ring. Electromagnetic pulses still crackle along its antennae.",
+      connections: [
+        ZoneType.library,
+        ZoneType.ocean,
+        ZoneType.chromeDocks,
+        ZoneType.ghostTerminal,
+        ZoneType.skyDock,
+      ],
+      mapPosition: Offset(0.10, 0.18),
       icon: Icons.cell_tower,
       color: Color(0xFFAB47BC),
-      unlockDay: 6,
+      imageAsset: 'assets/images/nodes/Signal_Tower.png',
     ),
-
-    // ── Right branch: Swamp → Factory → Desert ──
     ZoneType.swamp: const Zone(
       type: ZoneType.swamp,
       name: "Data Swamp",
       description:
-          "A quagmire of corrupted data streams and half-dissolved programs. "
-          "Toxic binary residue bubbles in sickly green pools.",
+          "A quagmire of corrupted data streams and half-dissolved programs. Toxic binary residue bubbles in sickly green pools.",
       connections: [
         ZoneType.wasteland,
         ZoneType.factory,
         ZoneType.circuitMarshes,
       ],
-      mapPosition: Offset(0.82, 0.58),
+      mapPosition: Offset(0.82, 0.68),
       icon: Icons.water,
       color: Color(0xFF2E7D32),
-      unlockDay: 1,
+      imageAsset: 'assets/images/nodes/Data_Swamp.png',
     ),
     ZoneType.factory: const Zone(
       type: ZoneType.factory,
       name: "Decommissioned Factory",
       description:
-          "Massive assembly lines that once built the Ring's infrastructure "
-          "now run wild, producing corrupted artifacts and hostile automatons.",
-      connections: [ZoneType.swamp, ZoneType.desert],
-      mapPosition: Offset(0.88, 0.35),
+          "Massive assembly lines that once built the Ring's infrastructure now run wild, producing corrupted artifacts and hostile automatons.",
+      connections: [
+        ZoneType.swamp,
+        ZoneType.desert,
+        ZoneType.neonBazaar,
+        ZoneType.acidSprawl,
+      ],
+      mapPosition: Offset(0.88, 0.48),
       icon: Icons.precision_manufacturing,
       color: Color(0xFF78909C),
-      unlockDay: 3,
+      imageAsset: 'assets/images/nodes/Decommissioned_Factory.png',
     ),
     ZoneType.desert: const Zone(
       type: ZoneType.desert,
       name: "Silicon Dunes",
       description:
-          "Vast expanses of silicon particles stretched across an infinite "
-          "plain. Sandstorms of microchips scour exposed surfaces raw.",
-      connections: [ZoneType.ruins, ZoneType.factory],
-      mapPosition: Offset(0.72, 0.40),
+          "Vast expanses of silicon particles stretched across an infinite plain. Sandstorms of microchips scour exposed surfaces raw.",
+      connections: [
+        ZoneType.ruins,
+        ZoneType.factory,
+        ZoneType.solarForge,
+        ZoneType.chromeSpire,
+        ZoneType.plasmaFields,
+        ZoneType.rustCanyon,
+      ],
+      mapPosition: Offset(0.78, 0.50),
       icon: Icons.wb_sunny,
       color: Color(0xFFFFCA28),
-      unlockDay: 3,
+      imageAsset: 'assets/images/nodes/Silicon_Dunes.png',
     ),
-
-    // ── Cross-links ──
     ZoneType.ocean: const Zone(
       type: ZoneType.ocean,
       name: "Deep Net Ocean",
       description:
-          "A vast abyss of liquid data where deleted files drift like "
-          "bioluminescent jellyfish. Deeper = more dangerous entities.",
-      connections: [ZoneType.graveyard, ZoneType.citadel, ZoneType.tower],
-      mapPosition: Offset(0.22, 0.25),
+          "A vast abyss of liquid data where deleted files drift like bioluminescent jellyfish. Deeper = more dangerous entities.",
+      connections: [
+        ZoneType.graveyard,
+        ZoneType.citadel,
+        ZoneType.tower,
+        ZoneType.chromeDocks,
+        ZoneType.shadowMarket,
+      ],
+      mapPosition: Offset(0.22, 0.32),
       icon: Icons.waves,
       color: Color(0xFF0277BD),
-      unlockDay: 3,
+      imageAsset: 'assets/images/nodes/Deep_Net_Ocean.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  NEW ZONES (15 existing unique places)
-    // ══════════════════════════════════════════════════════════════════════
-
-    // ── Neon Bazaar (settlement) ──
     ZoneType.neonBazaar: const Zone(
       type: ZoneType.neonBazaar,
       name: "Neon Bazaar",
       description:
-          "A bustling underground marketplace lit by holographic neon signs. "
-          "Merchants from every sector gather here to trade rare commodities.",
+          "A bustling underground marketplace lit by holographic neon signs. Merchants from every sector gather here to trade rare commodities.",
       connections: [
         ZoneType.wasteland,
         ZoneType.swamp,
         ZoneType.factory,
         ZoneType.blackMarketHub,
+        ZoneType.circuitMarshes,
+        ZoneType.acidSprawl,
+        ZoneType.ironHarbor,
+        ZoneType.dataNexus,
       ],
-      mapPosition: Offset(0.85, 0.65),
+      mapPosition: Offset(0.68, 0.70),
       icon: Icons.store,
       color: Color(0xFFE91E63),
-      unlockDay: 2,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Neon_Bazaar.png',
     ),
-
-    // ── Crystal Mines ──
     ZoneType.crystalMines: const Zone(
       type: ZoneType.crystalMines,
       name: "Crystal Mines",
       description:
-          "Subterranean mines filled with glowing data-crystals. The deeper "
-          "you go, the more valuable — and dangerous — the formations become.",
+          "Subterranean mines filled with glowing data-crystals. The deeper you go, the more valuable — and dangerous — the formations become.",
       connections: [
         ZoneType.deepCaves,
         ZoneType.mountain,
         ZoneType.neuralGarden,
+        ZoneType.echoCaverns,
       ],
-      mapPosition: Offset(0.15, 0.48),
+      mapPosition: Offset(0.35, 0.64),
       icon: Icons.diamond,
       color: Color(0xFF00BCD4),
-      unlockDay: 2,
+      imageAsset: 'assets/images/nodes/Crystal_Mines.png',
     ),
-
-    // ── Quantum Rift ──
     ZoneType.quantumRift: const Zone(
       type: ZoneType.quantumRift,
       name: "Quantum Rift",
       description:
-          "A tear in the Ring's fabric where quantum computing bleeds into "
-          "reality. Probability itself becomes a weapon here.",
+          "A tear in the Ring's fabric where quantum computing bleeds into reality. Probability itself becomes a weapon here.",
       connections: [
         ZoneType.abyss,
         ZoneType.volcano,
         ZoneType.voidGate,
         ZoneType.entropyWell,
+        ZoneType.obsidianSpire,
+        ZoneType.solarForge,
+        ZoneType.quantumSea,
+        ZoneType.zeroGVault,
       ],
-      mapPosition: Offset(0.55, 0.05),
+      mapPosition: Offset(0.28, 0.09),
       icon: Icons.blur_on,
       color: Color(0xFF9C27B0),
-      unlockDay: 8,
+      imageAsset: 'assets/images/nodes/Quantum_Rift.png',
     ),
-
-    // ── Shadow Market (settlement) ──
     ZoneType.shadowMarket: const Zone(
       type: ZoneType.shadowMarket,
       name: "Shadow Market",
       description:
-          "A hidden bazaar operating in the gaps between sectors. Anything "
-          "can be bought here — for the right price. No questions asked.",
+          "A hidden bazaar operating in the gaps between sectors. Anything can be bought here — for the right price. No questions asked.",
       connections: [
         ZoneType.graveyard,
         ZoneType.ocean,
         ZoneType.factory,
         ZoneType.dataNexus,
+        ZoneType.chromeDocks,
+        ZoneType.blackMarketHub,
       ],
-      mapPosition: Offset(0.32, 0.32),
+      mapPosition: Offset(0.32, 0.42),
       icon: Icons.nightlight,
       color: Color(0xFF607D8B),
-      unlockDay: 4,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Shadow_Market.png',
     ),
-
-    // ── Void Shrine ──
     ZoneType.voidShrine: const Zone(
       type: ZoneType.voidShrine,
       name: "Void Shrine",
       description:
-          "A sacred site where the void energy concentrates. Pilgrims come "
-          "here to meditate, but the void always demands something in return.",
-      connections: [ZoneType.abyss, ZoneType.volcano, ZoneType.voidGate],
-      mapPosition: Offset(0.30, 0.04),
+          "A sacred site where the void energy concentrates. Pilgrims come here to meditate, but the void always demands something in return.",
+      connections: [
+        ZoneType.abyss,
+        ZoneType.volcano,
+        ZoneType.voidGate,
+        ZoneType.shatteredCore,
+      ],
+      mapPosition: Offset(0.35, 0.12),
       icon: Icons.all_inclusive,
       color: Color(0xFF311B92),
-      unlockDay: 9,
+      imageAsset: 'assets/images/nodes/Void_Shrine.png',
     ),
-
-    // ── Chrome Docks ──
     ZoneType.chromeDocks: const Zone(
       type: ZoneType.chromeDocks,
       name: "Chrome Docks",
       description:
-          "A sprawling port where data-ships dock to offload cargo. The "
-          "chrome-plated structures gleam under artificial sunlight.",
+          "A sprawling port where data-ships dock to offload cargo. The chrome-plated structures gleam under artificial sunlight.",
       connections: [
         ZoneType.ocean,
         ZoneType.tower,
         ZoneType.shadowMarket,
         ZoneType.skyDock,
       ],
-      mapPosition: Offset(0.15, 0.12),
+      mapPosition: Offset(0.22, 0.22),
       icon: Icons.sailing,
       color: Color(0xFFB0BEC5),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/Chrome_Docks.png',
     ),
-
-    // ── Data Nexus ──
     ZoneType.dataNexus: const Zone(
       type: ZoneType.dataNexus,
       name: "Data Nexus",
       description:
-          "The central hub where all data streams converge. Massive servers "
-          "hum with the combined knowledge of the Ring's entire history.",
+          "The central hub where all data streams converge. Massive servers hum with the combined knowledge of the Ring's entire history.",
       connections: [
         ZoneType.library,
         ZoneType.shadowMarket,
         ZoneType.neonBazaar,
       ],
-      mapPosition: Offset(0.58, 0.42),
+      mapPosition: Offset(0.55, 0.38),
       icon: Icons.device_hub,
       color: Color(0xFF2196F3),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/Data_Nexus.png',
     ),
-
-    // ── Ghost Terminal ──
     ZoneType.ghostTerminal: const Zone(
       type: ZoneType.ghostTerminal,
       name: "Ghost Terminal",
       description:
-          "An abandoned command center haunted by residual AI consciousness. "
-          "The terminals still process data from a world that no longer exists.",
+          "An abandoned command center haunted by residual AI consciousness. The terminals still process data from a world that no longer exists.",
       connections: [ZoneType.graveyard, ZoneType.tower, ZoneType.deadSignal],
-      mapPosition: Offset(0.52, 0.28),
+      mapPosition: Offset(0.30, 0.20),
       icon: Icons.computer,
       color: Color(0xFF4CAF50),
-      unlockDay: 4,
+      imageAsset: 'assets/images/nodes/Ghost_Terminal.png',
     ),
-
-    // ── Solar Forge ──
     ZoneType.solarForge: const Zone(
       type: ZoneType.solarForge,
       name: "Solar Forge",
       description:
-          "A massive solar-powered factory that once built the Ring's outer "
-          "shell. Plasma rivers flow through its abandoned assembly lines.",
+          "A massive solar-powered factory that once built the Ring's outer shell. Plasma rivers flow through its abandoned assembly lines.",
       connections: [
         ZoneType.volcano,
         ZoneType.desert,
         ZoneType.quantumRift,
         ZoneType.plasmaFields,
+        ZoneType.chromeSpire,
+        ZoneType.scorchedPipeline,
       ],
-      mapPosition: Offset(0.75, 0.12),
+      mapPosition: Offset(0.72, 0.26),
       icon: Icons.wb_sunny,
       color: Color(0xFFFF9800),
-      unlockDay: 6,
+      imageAsset: 'assets/images/nodes/Solar_Forge.png',
     ),
-
-    // ── Neural Garden ──
     ZoneType.neuralGarden: const Zone(
       type: ZoneType.neuralGarden,
       name: "Neural Garden",
       description:
-          "A tranquil zone where data grows like plants. Neural networks "
-          "sprout from the ground, bearing fruits of pure information.",
-      connections: [ZoneType.forest, ZoneType.deepCaves, ZoneType.crystalMines],
-      mapPosition: Offset(0.22, 0.65),
+          "A tranquil zone where data grows like plants. Neural networks sprout from the ground, bearing fruits of pure information.",
+      connections: [
+        ZoneType.forest,
+        ZoneType.deepCaves,
+        ZoneType.crystalMines,
+        ZoneType.neonOasis,
+        ZoneType.dataTorrent,
+      ],
+      mapPosition: Offset(0.12, 0.72),
       icon: Icons.eco,
       color: Color(0xFF8BC34A),
-      unlockDay: 1,
+      imageAsset: 'assets/images/nodes/Neural_Garden.png',
     ),
-
-    // ── Circuit Marshes ──
     ZoneType.circuitMarshes: const Zone(
       type: ZoneType.circuitMarshes,
       name: "Circuit Marshes",
       description:
-          "A waterlogged wasteland of half-submerged circuit boards. Toxic "
-          "coolant fluid pools between rusted components.",
-      connections: [ZoneType.swamp, ZoneType.neonBazaar, ZoneType.acidSprawl],
-      mapPosition: Offset(0.90, 0.48),
+          "A waterlogged wasteland of half-submerged circuit boards. Toxic coolant fluid pools between rusted components.",
+      connections: [
+        ZoneType.swamp,
+        ZoneType.neonBazaar,
+        ZoneType.acidSprawl,
+        ZoneType.ironHarbor,
+      ],
+      mapPosition: Offset(0.90, 0.62),
       icon: Icons.water,
       color: Color(0xFF795548),
-      unlockDay: 3,
+      imageAsset: 'assets/images/nodes/Circuit_Marshes.png',
     ),
-
-    // ── Echo Caverns ──
     ZoneType.echoCaverns: const Zone(
       type: ZoneType.echoCaverns,
       name: "Echo Caverns",
       description:
-          "Caverns where sound behaves strangely — whispers from the past "
-          "echo through crystalline chambers, carrying fragments of memory.",
+          "Caverns where sound behaves strangely — whispers from the past echo through crystalline chambers, carrying fragments of memory.",
       connections: [
         ZoneType.mountain,
         ZoneType.crystalMines,
         ZoneType.forgottenServer,
       ],
-      mapPosition: Offset(0.05, 0.28),
+      mapPosition: Offset(0.05, 0.30),
       icon: Icons.terrain,
       color: Color(0xFF3F51B5),
-      unlockDay: 4,
+      imageAsset: 'assets/images/nodes/Echo_Caverns.png',
     ),
-
-    // ── Plasma Fields ──
     ZoneType.plasmaFields: const Zone(
       type: ZoneType.plasmaFields,
       name: "Plasma Fields",
       description:
-          "Open plains crackling with raw plasma energy. Lightning strikes "
-          "are constant, and the air itself glows with charged particles.",
+          "Open plains crackling with raw plasma energy. Lightning strikes are constant, and the air itself glows with charged particles.",
       connections: [
         ZoneType.desert,
         ZoneType.solarForge,
         ZoneType.scorchedPipeline,
+        ZoneType.chromeSpire,
       ],
-      mapPosition: Offset(0.82, 0.22),
+      mapPosition: Offset(0.82, 0.34),
       icon: Icons.electric_bolt,
       color: Color(0xFFFF5722),
-      unlockDay: 6,
+      imageAsset: 'assets/images/nodes/Plasma_Fields.png',
     ),
-
-    // ── Obsidian Spire ──
     ZoneType.obsidianSpire: const Zone(
       type: ZoneType.obsidianSpire,
       name: "Obsidian Spire",
       description:
-          "A towering structure of black glass that pierces the clouds. "
-          "Ancient defense systems still guard its upper reaches.",
-      connections: [ZoneType.tower, ZoneType.quantumRift, ZoneType.voidGate],
-      mapPosition: Offset(0.68, 0.03),
+          "A towering structure of black glass that pierces the clouds. Ancient defense systems still guard its upper reaches.",
+      connections: [
+        ZoneType.tower,
+        ZoneType.quantumRift,
+        ZoneType.voidGate,
+        ZoneType.skyDock,
+        ZoneType.deadSignal,
+        ZoneType.chromeLabyrinth,
+      ],
+      mapPosition: Offset(0.62, 0.16),
       icon: Icons.apartment,
       color: Color(0xFF212121),
-      unlockDay: 8,
+      imageAsset: 'assets/images/nodes/Obsidian_Spire.png',
     ),
-
-    // ── Void Gate (final zone) ──
     ZoneType.voidGate: const Zone(
       type: ZoneType.voidGate,
       name: "Void Gate",
       description:
-          "The ultimate gateway to the void beyond the Ring. Here, reality "
-          "fractures and only the most powerful runners survive.",
+          "The ultimate gateway to the void beyond the Ring. Here, reality fractures and only the most powerful runners survive.",
       connections: [
         ZoneType.quantumRift,
         ZoneType.obsidianSpire,
         ZoneType.voidShrine,
+        ZoneType.chromeLabyrinth,
+        ZoneType.entropyWell,
+        ZoneType.quantumSea,
       ],
-      mapPosition: Offset(0.85, 0.02),
+      mapPosition: Offset(0.82, 0.09),
       icon: Icons.exit_to_app,
       color: Color(0xFF000000),
-      unlockDay: 10,
+      imageAsset: 'assets/images/nodes/Void_Gate.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  TIER 1 — NEW SETTLEMENTS (5 new)
-    // ══════════════════════════════════════════════════════════════════════
     ZoneType.ironHarbor: const Zone(
       type: ZoneType.ironHarbor,
       name: "Iron Harbor",
       description:
-          "A fortified port settlement built from decommissioned warship hulls. "
-          "Rugged traders and retired mercenaries offer their services here.",
+          "A fortified port settlement built from decommissioned warship hulls. Rugged traders and retired mercenaries offer their services here.",
       connections: [
         ZoneType.wasteland,
         ZoneType.neonBazaar,
@@ -610,320 +588,401 @@ class Zone {
       mapPosition: Offset(0.92, 0.72),
       icon: Icons.anchor,
       color: Color(0xFFCFD8DC),
-      unlockDay: 2,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Iron_Harbor.png',
     ),
     ZoneType.chromeSpire: const Zone(
       type: ZoneType.chromeSpire,
       name: "Chrome Spire",
       description:
-          "A gleaming tower of polished chrome rising from the desert. "
-          "Elite engineers craft the finest augmentations money can buy.",
+          "A gleaming tower of polished chrome rising from the desert. Elite engineers craft the finest augmentations money can buy.",
       connections: [
         ZoneType.desert,
         ZoneType.solarForge,
         ZoneType.plasmaFields,
       ],
-      mapPosition: Offset(0.78, 0.30),
+      mapPosition: Offset(0.90, 0.38),
       icon: Icons.hardware,
       color: Color(0xFFE0E0E0),
-      unlockDay: 4,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Chrome_Spire.png',
     ),
     ZoneType.neonOasis: const Zone(
       type: ZoneType.neonOasis,
       name: "Neon Oasis",
       description:
-          "A hidden sanctuary bathed in perpetual neon glow. Travelers rest "
-          "in bioluminescent pools while healers tend their wounds.",
+          "A hidden sanctuary bathed in perpetual neon glow. Travelers rest in bioluminescent pools while healers tend their wounds.",
       connections: [
         ZoneType.neuralGarden,
         ZoneType.forest,
         ZoneType.crystalMines,
       ],
-      mapPosition: Offset(0.18, 0.55),
+      mapPosition: Offset(0.05, 0.66),
       icon: Icons.local_drink,
       color: Color(0xFF00E5FF),
-      unlockDay: 3,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Neon_Oasis.png',
     ),
     ZoneType.blackMarketHub: const Zone(
       type: ZoneType.blackMarketHub,
       name: "Black Market Hub",
       description:
-          "An encrypted marketplace that exists in a pocket of the Ring's "
-          "architecture. Illegal augments and forbidden data traded freely.",
+          "An encrypted marketplace that exists in a pocket of the Ring's architecture. Illegal augments and forbidden data traded freely.",
       connections: [
         ZoneType.neonBazaar,
         ZoneType.shadowMarket,
         ZoneType.hollowNetwork,
       ],
-      mapPosition: Offset(0.70, 0.50),
+      mapPosition: Offset(0.55, 0.52),
       icon: Icons.shield,
       color: Color(0xFF263238),
-      unlockDay: 5,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Black_Market_Hub.png',
     ),
     ZoneType.skyDock: const Zone(
       type: ZoneType.skyDock,
       name: "Sky Dock",
       description:
-          "A floating settlement tethered to the Ring's upper atmosphere. "
-          "Airship captains and sky-runners barter for supplies and fuel.",
+          "A floating settlement tethered to the Ring's upper atmosphere. Airship captains and sky-runners barter for supplies and fuel.",
       connections: [
         ZoneType.chromeDocks,
         ZoneType.tower,
         ZoneType.obsidianSpire,
       ],
-      mapPosition: Offset(0.10, 0.02),
+      mapPosition: Offset(0.12, 0.15),
       icon: Icons.flight,
       color: Color(0xFF80DEEA),
-      unlockDay: 6,
       isSettlement: true,
+      imageAsset: 'assets/images/nodes/Sky_Dock.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  TIER 2 — NEW MAIN-PATH DUNGEONS (5 new)
-    // ══════════════════════════════════════════════════════════════════════
     ZoneType.scorchedPipeline: const Zone(
       type: ZoneType.scorchedPipeline,
       name: "Scorched Pipeline",
       description:
-          "An ancient data pipeline scorched by residual plasma leaks. "
-          "Superheated data streams make traversal perilous but rewarding.",
+          "An ancient data pipeline scorched by residual plasma leaks. Superheated data streams make traversal perilous but rewarding.",
       connections: [
         ZoneType.plasmaFields,
         ZoneType.solarForge,
         ZoneType.rustCanyon,
       ],
-      mapPosition: Offset(0.85, 0.15),
+      mapPosition: Offset(0.82, 0.18),
       icon: Icons.local_fire_department,
       color: Color(0xFFFF6E40),
-      unlockDay: 6,
+      imageAsset: 'assets/images/nodes/Scorched_Pipeline.png',
     ),
     ZoneType.rustCanyon: const Zone(
       type: ZoneType.rustCanyon,
       name: "Rust Canyon",
       description:
-          "A deep ravine carved by centuries of corroding data. Rusted "
-          "remnants of ancient machines line the canyon walls.",
+          "A deep ravine carved by centuries of corroding data. Rusted remnants of ancient machines line the canyon walls.",
       connections: [
         ZoneType.scorchedPipeline,
         ZoneType.desert,
         ZoneType.decayedGrid,
       ],
-      mapPosition: Offset(0.65, 0.20),
+      mapPosition: Offset(0.68, 0.22),
       icon: Icons.terrain,
       color: Color(0xFFBF360C),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/Rust_Canyon.png',
     ),
     ZoneType.dataTorrent: const Zone(
       type: ZoneType.dataTorrent,
       name: "Data Torrent",
       description:
-          "A rushing river of raw data flows through a narrow canyon. "
-          "Swim against the current to find hidden caches upstream.",
+          "A rushing river of raw data flows through a narrow canyon. Swim against the current to find hidden caches upstream.",
       connections: [ZoneType.forest, ZoneType.neuralGarden, ZoneType.deepCaves],
-      mapPosition: Offset(0.20, 0.70),
+      mapPosition: Offset(0.28, 0.76),
       icon: Icons.water,
       color: Color(0xFF0097A7),
-      unlockDay: 1,
+      imageAsset: 'assets/images/nodes/Data_Torrent.png',
     ),
     ZoneType.decayedGrid: const Zone(
       type: ZoneType.decayedGrid,
       name: "Decayed Grid",
       description:
-          "A crumbling sector of the Ring where the foundational grid has "
-          "begun to collapse. Gravity shifts unpredictably between sectors.",
+          "A crumbling sector of the Ring where the foundational grid has begun to collapse. Gravity shifts unpredictably between sectors.",
       connections: [
         ZoneType.rustCanyon,
         ZoneType.graveyard,
         ZoneType.ghostTerminal,
       ],
-      mapPosition: Offset(0.55, 0.35),
+      mapPosition: Offset(0.48, 0.42),
       icon: Icons.grid_off,
       color: Color(0xFF5D4037),
-      unlockDay: 4,
+      imageAsset: 'assets/images/nodes/Decayed_Grid.png',
     ),
     ZoneType.shatteredCore: const Zone(
       type: ZoneType.shatteredCore,
       name: "Shattered Core",
       description:
-          "The remnants of a processing core that overloaded millennia ago. "
-          "Shards of crystallized data float in zero-gravity pockets.",
-      connections: [ZoneType.abyss, ZoneType.volcano, ZoneType.voidShrine],
-      mapPosition: Offset(0.48, 0.06),
+          "The remnants of a processing core that overloaded millennia ago. Shards of crystallized data float in zero-gravity pockets.",
+      connections: [
+        ZoneType.abyss,
+        ZoneType.volcano,
+        ZoneType.voidShrine,
+        ZoneType.entropyWell,
+        ZoneType.voidNexus,
+      ],
+      mapPosition: Offset(0.42, 0.12),
       icon: Icons.adjust,
       color: Color(0xFFB71C1C),
-      unlockDay: 7,
+      imageAsset: 'assets/images/nodes/Shattered_Core.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  TIER 3 — NEW OFF-BEATEN DUNGEONS (5 new)
-    // ══════════════════════════════════════════════════════════════════════
     ZoneType.forgottenServer: const Zone(
       type: ZoneType.forgottenServer,
       name: "Forgotten Server",
       description:
-          "A massive server farm abandoned when the Ring was restructured. "
-          "Legacy processes still run, guarding treasures of the old world.",
+          "A massive server farm abandoned when the Ring was restructured. Legacy processes still run, guarding treasures of the old world.",
       connections: [
         ZoneType.echoCaverns,
         ZoneType.library,
         ZoneType.hollowNetwork,
       ],
-      mapPosition: Offset(0.03, 0.20),
+      mapPosition: Offset(0.18, 0.32),
       icon: Icons.dns,
       color: Color(0xFF1565C0),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/Forgotten_Server.png',
     ),
     ZoneType.acidSprawl: const Zone(
       type: ZoneType.acidSprawl,
       name: "Acid Sprawl",
       description:
-          "An industrial wasteland where chemical waste has corroded everything "
-          "into twisted metal sculptures. Toxic fog limits visibility.",
+          "An industrial wasteland where chemical waste has corroded everything into twisted metal sculptures. Toxic fog limits visibility.",
       connections: [
         ZoneType.circuitMarshes,
         ZoneType.factory,
         ZoneType.neonBazaar,
       ],
-      mapPosition: Offset(0.93, 0.42),
+      mapPosition: Offset(0.95, 0.44),
       icon: Icons.science,
       color: Color(0xFF9CCC65),
-      unlockDay: 4,
+      imageAsset: 'assets/images/nodes/Acid_Sprawl.png',
     ),
     ZoneType.hollowNetwork: const Zone(
       type: ZoneType.hollowNetwork,
       name: "Hollow Network",
       description:
-          "A vast underground network of hollow data-conduits. Echoes of "
-          "deleted transmissions whisper through the empty channels.",
+          "A vast underground network of hollow data-conduits. Echoes of deleted transmissions whisper through the empty channels.",
       connections: [
         ZoneType.blackMarketHub,
         ZoneType.forgottenServer,
         ZoneType.deadSignal,
       ],
-      mapPosition: Offset(0.45, 0.28),
+      mapPosition: Offset(0.38, 0.28),
       icon: Icons.cable,
       color: Color(0xFF757575),
-      unlockDay: 5,
+      imageAsset: 'assets/images/nodes/Hollow_Network.png',
     ),
     ZoneType.staticRift: const Zone(
       type: ZoneType.staticRift,
       name: "Static Rift",
       description:
-          "A rift in the Ring's data-layer where static interference creates "
-          "phantom duplicates. Fight yourself or outsmart your echo.",
+          "A rift in the Ring's data-layer where static interference creates phantom duplicates. Fight yourself or outsmart your echo.",
       connections: [
         ZoneType.wasteland,
         ZoneType.rustCanyon,
         ZoneType.decayedGrid,
       ],
-      mapPosition: Offset(0.60, 0.55),
+      mapPosition: Offset(0.72, 0.55),
       icon: Icons.signal_cellular_alt,
       color: Color(0xFFEC407A),
-      unlockDay: 3,
+      imageAsset: 'assets/images/nodes/Static_Rift.png',
     ),
     ZoneType.deadSignal: const Zone(
       type: ZoneType.deadSignal,
       name: "Dead Signal",
       description:
-          "A zone where all signals go to die. No transmissions escape, "
-          "no frequencies penetrate. Total digital silence.",
+          "A zone where all signals go to die. No transmissions escape, no frequencies penetrate. Total digital silence.",
       connections: [
         ZoneType.ghostTerminal,
         ZoneType.hollowNetwork,
         ZoneType.obsidianSpire,
       ],
-      mapPosition: Offset(0.40, 0.15),
+      mapPosition: Offset(0.48, 0.22),
       icon: Icons.signal_cellular_off,
       color: Color(0xFF455A64),
-      unlockDay: 6,
+      imageAsset: 'assets/images/nodes/Dead_Signal.png',
     ),
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  TIER 4 — NEW ENDGAME ZONES (5 new)
-    // ══════════════════════════════════════════════════════════════════════
     ZoneType.entropyWell: const Zone(
       type: ZoneType.entropyWell,
       name: "Entropy Well",
       description:
-          "A gravity well of pure entropy where data decomposes into its "
-          "base components. The closer you get, the more reality unravels.",
+          "A gravity well of pure entropy where data decomposes into its base components. The closer you get, the more reality unravels.",
       connections: [
         ZoneType.quantumRift,
         ZoneType.shatteredCore,
         ZoneType.voidGate,
+        ZoneType.voidNexus,
+        ZoneType.deepSpire,
+        ZoneType.quantumSea,
+        ZoneType.phasmMirage,
+        ZoneType.tachyonFaultline,
       ],
-      mapPosition: Offset(0.58, 0.02),
+      mapPosition: Offset(0.55, 0.08),
       icon: Icons.compress,
       color: Color(0xFF880E4F),
-      unlockDay: 9,
+      imageAsset: 'assets/images/nodes/Entropy_Well.png',
     ),
     ZoneType.chromeLabyrinth: const Zone(
       type: ZoneType.chromeLabyrinth,
       name: "Chrome Labyrinth",
       description:
-          "An ever-shifting maze of chrome corridors and mirrored walls. "
-          "The labyrinth rearranges itself every cycle, trapping the unwary.",
+          "An ever-shifting maze of chrome corridors and mirrored walls. The labyrinth rearranges itself every cycle, trapping the unwary.",
       connections: [
         ZoneType.obsidianSpire,
         ZoneType.skyDock,
         ZoneType.voidGate,
+        ZoneType.resonanceFault,
       ],
-      mapPosition: Offset(0.75, 0.05),
+      mapPosition: Offset(0.72, 0.12),
       icon: Icons.account_tree,
       color: Color(0xFFB0BEC5),
-      unlockDay: 9,
+      imageAsset: 'assets/images/nodes/Chrome_Labyrinth.png',
     ),
     ZoneType.voidNexus: const Zone(
       type: ZoneType.voidNexus,
       name: "Void Nexus",
       description:
-          "The convergence point of all void energies in the Ring. Reality "
-          "is thinnest here, and the boundary between code and flesh blurs.",
+          "The convergence point of all void energies in the Ring. Reality is thinnest here, and the boundary between code and flesh blurs.",
       connections: [
         ZoneType.abyss,
         ZoneType.shatteredCore,
         ZoneType.entropyWell,
+        ZoneType.deepSpire,
+        ZoneType.sanguineConduit,
       ],
-      mapPosition: Offset(0.35, 0.01),
+      mapPosition: Offset(0.42, 0.06),
       icon: Icons.all_inclusive,
       color: Color(0xFF4A148C),
-      unlockDay: 10,
+      imageAsset: 'assets/images/nodes/Void_Nexus.png',
     ),
     ZoneType.deepSpire: const Zone(
       type: ZoneType.deepSpire,
       name: "Deep Spire",
       description:
-          "A spire that descends rather than ascends, plunging into the "
-          "Ring's deepest core. Ancient code pulses like a heartbeat.",
+          "A spire that descends rather than ascends, plunging into the Ring's deepest core. Ancient code pulses like a heartbeat.",
       connections: [
         ZoneType.voidNexus,
         ZoneType.deadSignal,
         ZoneType.entropyWell,
+        ZoneType.sanguineConduit,
+        ZoneType.cryoCompileCrypt,
+        ZoneType.tachyonFaultline,
       ],
-      mapPosition: Offset(0.48, 0.01),
+      mapPosition: Offset(0.48, 0.05),
       icon: Icons.swap_vert,
       color: Color(0xFF1A237E),
-      unlockDay: 10,
+      imageAsset: 'assets/images/nodes/Deep_Spire.png',
     ),
     ZoneType.quantumSea: const Zone(
       type: ZoneType.quantumSea,
       name: "Quantum Sea",
       description:
-          "An ocean of quantum probability where every possible reality "
-          "exists simultaneously. Only those who can collapse the waveform survive.",
+          "An ocean of quantum probability where every possible reality exists simultaneously. Only those who can collapse the waveform survive.",
       connections: [
         ZoneType.quantumRift,
         ZoneType.voidGate,
         ZoneType.entropyWell,
+        ZoneType.phasmMirage,
       ],
-      mapPosition: Offset(0.65, 0.01),
+      mapPosition: Offset(0.65, 0.06),
       icon: Icons.water,
       color: Color(0xFF006064),
-      unlockDay: 11,
+      imageAsset: 'assets/images/nodes/Quantum_Sea.png',
+    ),
+    ZoneType.tachyonFaultline: const Zone(
+      type: ZoneType.tachyonFaultline,
+      name: "Tachyon Faultline",
+      description:
+          "A localized time-space tear where execution cycles overwrite each other. The architecture violently strobes between different states.",
+      connections: [
+        ZoneType.entropyWell,
+        ZoneType.deepSpire,
+        ZoneType.zeroGVault,
+        ZoneType.cryoCompileCrypt,
+      ],
+      mapPosition: Offset(0.35, 0.022),
+      icon: Icons.flash_on,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/Tachyon_Faultline.png',
+    ),
+    ZoneType.resonanceFault: const Zone(
+      type: ZoneType.resonanceFault,
+      name: "Resonance Fault",
+      description:
+          "A jagged canyon of brittle, crystalline logic-gates that vibrate at catastrophic frequencies.",
+      connections: [
+        ZoneType.voidGate,
+        ZoneType.chromeLabyrinth,
+        ZoneType.highForgeMatrix,
+      ],
+      mapPosition: Offset(0.82, 0.025),
+      icon: Icons.vibration,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/Resonance_Fault.png',
+    ),
+    ZoneType.sanguineConduit: const Zone(
+      type: ZoneType.sanguineConduit,
+      name: "The Sanguine Conduit",
+      description:
+          "An organic, pulsing network of pipes carrying corrupt, volatile crimson data.",
+      connections: [
+        ZoneType.deepSpire,
+        ZoneType.voidNexus,
+        ZoneType.cryoCompileCrypt,
+      ],
+      mapPosition: Offset(0.25, 0.018),
+      icon: Icons.bloodtype,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/The_Sanguine_Conduit.png',
+    ),
+    ZoneType.phasmMirage: const Zone(
+      type: ZoneType.phasmMirage,
+      name: "Phasm Mirage",
+      description:
+          "An endless expanse of shimmering, hyper-reflective data-dunes where ambient light bends in impossible angles.",
+      connections: [
+        ZoneType.quantumSea,
+        ZoneType.entropyWell,
+        ZoneType.highForgeMatrix,
+      ],
+      mapPosition: Offset(0.70, 0.015),
+      icon: Icons.museum,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/Phasm_Mirage.png',
+    ),
+    ZoneType.zeroGVault: const Zone(
+      type: ZoneType.zeroGVault,
+      name: "Zero-G Vault",
+      description:
+          "A floating debris field of inverted architecture suspended above the grid.",
+      connections: [ZoneType.quantumRift, ZoneType.tachyonFaultline],
+      mapPosition: Offset(0.55, 0.012),
+      icon: Icons.height,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/Zero-G_Vault.png',
+    ),
+    ZoneType.cryoCompileCrypt: const Zone(
+      type: ZoneType.cryoCompileCrypt,
+      name: "Cryo-Compile Crypt",
+      description:
+          "An absolute-zero storage vault where old, discarded code blocks are preserved in frozen stasis.",
+      connections: [ZoneType.sanguineConduit, ZoneType.tachyonFaultline],
+      mapPosition: Offset(0.38, 0.008),
+      icon: Icons.ac_unit,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/Cryo-Compile_Crypt.png',
+    ),
+    ZoneType.highForgeMatrix: const Zone(
+      type: ZoneType.highForgeMatrix,
+      name: "The High-Forge Matrix",
+      description:
+          "A divine, blinding assembly floor where the original blueprints of the Ring were cast.",
+      connections: [ZoneType.resonanceFault, ZoneType.phasmMirage],
+      mapPosition: Offset(0.78, 0.005),
+      icon: Icons.local_fire_department,
+      color: Color(0xFFFF1744),
+      imageAsset: 'assets/images/nodes/The_High_Forge_Matrix.png',
     ),
   };
 }

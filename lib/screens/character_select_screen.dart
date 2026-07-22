@@ -3,6 +3,7 @@ import '../models/item.dart';
 import '../models/character.dart';
 import '../widgets/game_image.dart';
 import '../widgets/game_theme.dart';
+import '../widgets/responsive_layout.dart';
 
 class CharacterSelectScreen extends StatelessWidget {
   final Function(Character) onSelect;
@@ -125,173 +126,190 @@ class CharacterSelectScreen extends StatelessWidget {
     return Colors.white;
   }
 
+  Widget _buildCharacterCard(BuildContext context, Character char) {
+    final color = _classColor(char.className);
+    final desc = _descriptions[char.name] ?? '';
+
+    return Card(
+      color: GameColors.surface,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: color.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header row
+            Row(
+              children: [
+                GameImage(
+                  imagePath: char.imagePath,
+                  fallbackIcon: Icons.person,
+                  size: 64,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        char.name,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        char.className,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Description
+            Text(
+              desc,
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Stat chips
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                StatChip(
+                  icon: Icons.favorite,
+                  label: '${char.hp} HP',
+                  color: GameColors.success,
+                ),
+                StatChip(
+                  icon: Icons.flash_on,
+                  label: '${char.baseAttack} ATK',
+                  color: GameColors.primary,
+                ),
+                StatChip(
+                  icon: Icons.monetization_on,
+                  label: '${char.credits}c',
+                  color: GameColors.gold,
+                ),
+                StatChip(
+                  icon: Icons.view_module,
+                  label: '${char.slotLayout.length} Slots',
+                  color: GameColors.accent,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Slot layout
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                char.slotLayout.map((s) => s.name.toUpperCase()).join(" → "),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: color.withValues(alpha: 0.8),
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Starter: ${char.startingItem.name}",
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white54,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+
+            // Deploy button
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 3,
+                  shadowColor: color.withValues(alpha: 0.4),
+                ),
+                onPressed: () => onSelect(char.clone()),
+                child: const Text(
+                  "DEPLOY VECTOR",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isLandscape = Responsive.isLandscape(context);
+    final cols = Responsive.adaptiveGridColumns(
+      context,
+      portraitCols: 1,
+      landscapeCols: 2,
+    );
+
     return Scaffold(
       backgroundColor: GameColors.background,
       appBar: AppBar(
         title: const Text("Select Survivor Class"),
         backgroundColor: GameColors.surface,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: characters.length,
-        itemBuilder: (context, index) {
-          final char = characters[index];
-          final color = _classColor(char.className);
-          final desc = _descriptions[char.name] ?? '';
-
-          return Card(
-            color: GameColors.surface,
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: color.withValues(alpha: 0.3), width: 1),
-            ),
-            child: Padding(
+      body: isLandscape
+          ? GridView.builder(
               padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header row
-                  Row(
-                    children: [
-                      GameImage(
-                        imagePath: char.imagePath,
-                        fallbackIcon: Icons.person,
-                        size: 64,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              char.name,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              char.className,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Description
-                  Text(
-                    desc,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Stat chips
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      StatChip(
-                        icon: Icons.favorite,
-                        label: '${char.hp} HP',
-                        color: GameColors.success,
-                      ),
-                      StatChip(
-                        icon: Icons.flash_on,
-                        label: '${char.baseAttack} ATK',
-                        color: GameColors.primary,
-                      ),
-                      StatChip(
-                        icon: Icons.monetization_on,
-                        label: '${char.credits}c',
-                        color: GameColors.gold,
-                      ),
-                      StatChip(
-                        icon: Icons.view_module,
-                        label: '${char.slotLayout.length} Slots',
-                        color: GameColors.accent,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Slot layout
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      char.slotLayout
-                          .map((s) => s.name.toUpperCase())
-                          .join(" → "),
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: color.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    "Starter: ${char.startingItem.name}",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white54,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Deploy button
-                  SizedBox(
-                    height: 44,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 3,
-                        shadowColor: color.withValues(alpha: 0.4),
-                      ),
-                      onPressed: () => onSelect(char.clone()),
-                      child: const Text(
-                        "DEPLOY VECTOR",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
               ),
+              itemCount: characters.length,
+              itemBuilder: (context, index) =>
+                  _buildCharacterCard(context, characters[index]),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: characters.length,
+              itemBuilder: (context, index) =>
+                  _buildCharacterCard(context, characters[index]),
             ),
-          );
-        },
-      ),
     );
   }
 }

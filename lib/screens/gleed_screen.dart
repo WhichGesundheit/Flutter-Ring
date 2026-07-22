@@ -78,15 +78,32 @@ class _GleedScreenState extends State<GleedScreen> {
   }
 
   void _attemptCure() {
-    if (GleedShop.attemptGamblingCure()) {
-      widget.onCureStatus();
+    final cost = GleedShop.gamblingCost;
+    if (widget.player.credits < cost) {
       _showSnackBar(
-        'GLEED\'s luck rubs off — a status effect has been cured!',
+        'Not enough credits! Need ${cost}c to gamble.',
+        Colors.redAccent,
+      );
+      return;
+    }
+
+    setState(() {
+      widget.player.credits -= cost;
+    });
+
+    if (GleedShop.attemptGamblingCure()) {
+      final winnings = cost + GleedShop.cureBonusCredits;
+      setState(() {
+        widget.player.credits += winnings;
+        widget.onCureStatus();
+      });
+      _showSnackBar(
+        'GLEED\'s luck rubs off — cursed! Won ${winnings}c!',
         Colors.greenAccent,
       );
     } else {
       _showSnackBar(
-        'GLEED shrugs. "Bad luck, friend. Try again."',
+        'GLEED shrugs. "Bad luck, friend. Lost ${cost}c."',
         Colors.orangeAccent,
       );
     }
@@ -222,9 +239,18 @@ class _GleedScreenState extends State<GleedScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     '30% chance to cure cursed/weakened status effects',
-                    style: TextStyle(color: Colors.white54, fontSize: 10),
+                    style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Cost: ${GleedShop.gamblingCost}c  ·  Win: ${GleedShop.gamblingCost + GleedShop.cureBonusCredits}c on success',
+                    style: TextStyle(
+                      color: Colors.amberAccent.withValues(alpha: 0.7),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(
@@ -236,9 +262,9 @@ class _GleedScreenState extends State<GleedScreen> {
                       ),
                     ),
                     onPressed: _attemptCure,
-                    child: const Text(
-                      'TRY YOUR LUCK',
-                      style: TextStyle(
+                    child: Text(
+                      'TRY YOUR LUCK (${GleedShop.gamblingCost}c)',
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.8,
                       ),

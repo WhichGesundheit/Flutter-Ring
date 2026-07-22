@@ -4,7 +4,7 @@ import '../widgets/game_theme.dart';
 
 class SaveManagerScreen extends StatefulWidget {
   final Function(int slot)? onLoadSave;
-  final VoidCallback onNewGame;
+  final Function(int slot, String name)? onNewGame;
   final bool showBackButton;
   final VoidCallback? onBack;
 
@@ -179,7 +179,7 @@ class _SaveManagerScreenState extends State<SaveManagerScreen> {
                       ),
                       elevation: 3,
                     ),
-                    onPressed: widget.onNewGame,
+                    onPressed: _showNewGameDialog,
                     label: const Text(
                       'NEW GAME',
                       style: TextStyle(
@@ -375,21 +375,21 @@ class _SaveManagerScreenState extends State<SaveManagerScreen> {
               const SizedBox(height: 10),
 
               // Stats row
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   _buildStatChip(
                     Icons.access_time,
                     'Day $days',
                     GameColors.accent,
                   ),
-                  const SizedBox(width: 8),
                   _buildStatChip(
                     Icons.location_on,
                     save.currentZone[0].toUpperCase() +
                         save.currentZone.substring(1),
                     zoneColor,
                   ),
-                  const SizedBox(width: 8),
                   _buildStatChip(
                     Icons.favorite,
                     '${save.hp}/${save.maxHp}',
@@ -397,7 +397,6 @@ class _SaveManagerScreenState extends State<SaveManagerScreen> {
                         ? GameColors.success
                         : GameColors.warning,
                   ),
-                  const SizedBox(width: 8),
                   _buildStatChip(
                     Icons.monetization_on,
                     '${save.credits}g',
@@ -441,6 +440,94 @@ class _SaveManagerScreenState extends State<SaveManagerScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _showNewGameDialog() async {
+    // Find first empty slot
+    int? emptySlot;
+    for (int i = 0; i < SaveFileManager.maxSlots; i++) {
+      if (!_saves.any((s) => s.slot == i)) {
+        emptySlot = i;
+        break;
+      }
+    }
+
+    if (emptySlot == null) {
+      // All slots full - show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All save slots are full. Delete a save first.'),
+            backgroundColor: GameColors.danger,
+          ),
+        );
+      }
+      return;
+    }
+
+    final controller = TextEditingController(text: 'Save ${emptySlot + 1}');
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: GameColors.surface,
+        title: const Text('New Save', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Slot ${emptySlot! + 1}',
+              style: TextStyle(color: GameColors.accent, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Enter save name',
+                hintStyle: TextStyle(color: Colors.grey[600]),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: GameColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: GameColors.accent),
+                ),
+              ),
+              autofocus: true,
+              maxLength: 30,
+              onSubmitted: (_) {
+                final name = controller.text.trim();
+                if (name.isNotEmpty) {
+                  Navigator.pop(ctx, {'slot': emptySlot, 'name': name});
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[400])),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(ctx, {'slot': emptySlot, 'name': name});
+              }
+            },
+            child: const Text(
+              'Create',
+              style: TextStyle(color: GameColors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted && widget.onNewGame != null) {
+      widget.onNewGame!(result['slot'] as int, result['name'] as String);
+    }
   }
 
   Widget _buildStatChip(IconData icon, String label, Color color) {

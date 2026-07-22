@@ -252,6 +252,12 @@ extension MysteryBoxTierExtension on MysteryBoxTier {
 class GleedShop {
   static final Random _random = Random();
 
+  /// Cost per gambling attempt at Gleed's Den
+  static const int gamblingCost = 30;
+
+  /// Credits won on successful cure (on top of cost refund)
+  static const int cureBonusCredits = 20;
+
   /// Roll a mystery box item.
   /// Odds are lower than normal drop rates but influenced by luck.
   /// Returns a random item based on tier odds + luck modifier.

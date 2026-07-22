@@ -6,6 +6,8 @@ import '../models/item.dart';
 import '../models/enemy.dart';
 import '../widgets/game_image.dart';
 import '../widgets/game_theme.dart';
+import '../widgets/responsive_layout.dart';
+import '../widgets/status_effect_display.dart';
 
 class BattleScreen extends StatefulWidget {
   final Character player;
@@ -1051,6 +1053,8 @@ class _BattleScreenState extends State<BattleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = Responsive.isLandscape(context);
+
     return Scaffold(
       backgroundColor: GameColors.background,
       appBar: AppBar(
@@ -1088,260 +1092,701 @@ class _BattleScreenState extends State<BattleScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            if (widget.isHyperBoss)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 6,
-                  horizontal: 12,
-                ),
-                color: Colors.deepOrange.withValues(alpha: 0.25),
-                child: const Text(
-                  '⚡ HYPER BOSS — NO RETREAT ⚡',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.deepOrangeAccent,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            // ── COMBATANT DISPLAY ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        GameImage(
-                          imagePath: widget.player.imagePath,
-                          fallbackIcon: Icons.person,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.player.name,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        HpBar(
-                          current: widget.player.hp,
-                          max: widget.player.maxHp,
-                          height: 8,
-                          showNumbers: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: widget.isHyperBoss
-                          ? Colors.deepOrange.withValues(alpha: 0.15)
-                          : (widget.enemy.isBoss
-                                ? GameColors.gold.withValues(alpha: 0.15)
-                                : GameColors.primary.withValues(alpha: 0.15)),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: widget.isHyperBoss
-                            ? Colors.deepOrange.withValues(alpha: 0.6)
-                            : (widget.enemy.isBoss
-                                  ? GameColors.gold.withValues(alpha: 0.4)
-                                  : GameColors.primary.withValues(alpha: 0.4)),
-                      ),
-                    ),
-                    child: Text(
-                      widget.isHyperBoss
-                          ? "HYPER"
-                          : (widget.enemy.isBoss ? "BOSS" : "VS"),
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: widget.isHyperBoss
-                            ? Colors.deepOrangeAccent
-                            : (widget.enemy.isBoss
-                                  ? GameColors.gold
-                                  : GameColors.primary),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        GameImage(
-                          imagePath: widget.enemy.imagePath,
-                          fallbackIcon: widget.enemy.isBoss
-                              ? Icons.psychology
-                              : Icons.adb,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.enemy.name,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isHyperBoss
-                                ? Colors.deepOrangeAccent
-                                : (widget.enemy.isBoss
-                                      ? GameColors.gold
-                                      : null),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        HpBar(
-                          current: widget.enemy.hp,
-                          max: widget.enemy.maxHp,
-                          height: 8,
-                          showNumbers: true,
-                        ),
-                        if (widget.enemy.isBoss &&
-                            widget.enemy.mechanic != BossMechanic.none)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              _getMechanicName(widget.enemy.mechanic),
-                              style: TextStyle(
-                                color: GameColors.warning,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
+        child: isLandscape ? _buildLandscapeBattle() : _buildPortraitBattle(),
+      ),
+    );
+  }
 
-            // ── STAT SUMMARY ──
-            if (isFighting || _battleFinished)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PORTRAIT BATTLE (original vertical Column)
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildPortraitBattle() {
+    return Column(
+      children: [
+        if (widget.isHyperBoss) _buildHyperBossBanner(),
+        _buildCombatantRow(),
+        const SizedBox(height: 8),
+        if (isFighting || _battleFinished) _buildStatSummary(),
+        const SizedBox(height: 4),
+        if (isFighting || _battleFinished) ...[
+          _buildDamageTypeRow(),
+          const SizedBox(height: 2),
+          _buildResistanceRow(),
+          const SizedBox(height: 4),
+        ],
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _buildLogContainer(),
+          ),
+        ),
+        Padding(padding: const EdgeInsets.all(12), child: _buildBottomButton()),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LANDSCAPE BATTLE (3 panels: character | combat | log)
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildLandscapeBattle() {
+    final pad = Responsive.horizontalPadding(context);
+    return Column(
+      children: [
+        if (widget.isHyperBoss) _buildHyperBossBanner(),
+        Expanded(
+          child: Row(
+            children: [
+              // ── LEFT PANEL: Character info ──
+              SizedBox(
+                width: 280,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0E1018),
+                    border: Border(right: BorderSide(color: GameColors.border)),
                   ),
-                  decoration: BoxDecoration(
-                    color: GameColors.surface,
-                    borderRadius: BorderRadius.circular(8),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(pad),
+                    child: Column(
+                      children: [
+                        _buildPlayerBattleInfo(),
+                        if (isFighting || _battleFinished) ...[
+                          const SizedBox(height: 8),
+                          if (isFighting || _battleFinished)
+                            _buildStatSummary(),
+                          const SizedBox(height: 4),
+                          _buildDamageTypeRow(),
+                          const SizedBox(height: 2),
+                          _buildResistanceRow(),
+                        ],
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _miniStat(
-                        Icons.flash_on,
-                        '$netAttack',
-                        'ATK',
-                        GameColors.primary,
-                      ),
-                      _miniStat(
-                        Icons.shield,
-                        '$netBlock',
-                        'DEF',
-                        GameColors.accent,
-                      ),
-                      _miniStat(
-                        Icons.bolt,
-                        '${(netCritChance * 100).toInt()}%',
-                        'CRIT',
-                        GameColors.gold,
-                      ),
-                      if (_battleFinished)
-                        _miniStat(
-                          Icons.compare_arrows,
-                          '$_turns',
-                          'TURNS',
-                          Colors.white70,
+                ),
+              ),
+              // ── MIDDLE PANEL: Combat area ──
+              Expanded(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.all(pad),
+                        child: Column(
+                          children: [
+                            _buildCombatantRow(),
+                            if (isFighting || _battleFinished) ...[
+                              const SizedBox(height: 8),
+                              _buildPlayerBattleInfo(compact: true),
+                            ],
+                          ],
                         ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(pad, 0, pad, 8),
+                      child: _buildBottomButton(),
+                    ),
+                  ],
+                ),
+              ),
+              // ── RIGHT PANEL: Log ──
+              SizedBox(
+                width: 320,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0E1018),
+                    border: Border(left: BorderSide(color: GameColors.border)),
+                  ),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(pad),
+                          child: _buildLogContainer(),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-            const SizedBox(height: 4),
-
-            // ── DAMAGE TYPES & RESISTANCES ──
-            if (isFighting || _battleFinished) ...[
-              _buildDamageTypeRow(),
-              const SizedBox(height: 2),
-              _buildResistanceRow(),
-              const SizedBox(height: 4),
             ],
+          ),
+        ),
+      ],
+    );
+  }
 
-            // ── BATTLE LOG ──
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: GameColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: GameColors.border),
-                  ),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(4),
-                    itemCount: logs.length,
-                    itemBuilder: (context, i) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2.0),
-                      child: Text(
-                        logs[i],
-                        style: TextStyle(
-                          color: logs[i].contains('💥')
-                              ? GameColors.gold
-                              : logs[i].contains('✅')
-                              ? GameColors.success
-                              : logs[i].contains('🧪')
-                              ? GameColors.accent
-                              : logs[i].contains('❌')
-                              ? GameColors.danger
-                              : logs[i].contains('🔥')
-                              ? Colors.orangeAccent
-                              : logs[i].contains('❄️')
-                              ? Colors.cyanAccent
-                              : logs[i].contains('☠️')
-                              ? Colors.lightGreen
-                              : logs[i].contains('💀')
-                              ? Colors.deepPurpleAccent
-                              : logs[i].contains('✨')
-                              ? Colors.yellowAccent
-                              : logs[i].contains('🌀')
-                              ? Colors.purpleAccent
-                              : Colors.grey,
-                          fontFamily: 'monospace',
+  /// Compact player info widget for the character panel in landscape.
+  /// When compact=false (left panel), shows full character view with
+  /// status effects, combat stats, and equipped gear.
+  Widget _buildPlayerBattleInfo({bool compact = false}) {
+    if (compact) {
+      // ── Compact version: minimal info for the middle combat panel ──
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: GameColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: GameColors.border),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                GameImage(
+                  imagePath: widget.player.imagePath,
+                  fallbackIcon: Icons.person,
+                  size: 28,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.player.name,
+                        style: const TextStyle(
                           fontSize: 11,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
+                      Text(
+                        widget.player.className,
+                        style: TextStyle(
+                          color: GameColors.primary,
+                          fontSize: 8,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
             ),
-
-            // ── BOTTOM BUTTON ──
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: _buildBottomButton(),
+            const SizedBox(height: 6),
+            HpBar(
+              current: widget.player.hp,
+              max: widget.player.effectiveMaxHp,
+              height: 8,
+              showLabel: true,
+              showNumbers: true,
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.monetization_on, color: GameColors.gold, size: 10),
+                const SizedBox(width: 3),
+                Text(
+                  '${widget.player.credits}',
+                  style: TextStyle(
+                    color: GameColors.gold,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
+        ),
+      );
+    }
+
+    // ── Full version: comprehensive character view for the left panel ──
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: GameColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GameColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Portrait + Name + Class ──
+          Row(
+            children: [
+              GameImage(
+                imagePath: widget.player.imagePath,
+                fallbackIcon: Icons.person,
+                size: 40,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.player.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      widget.player.className,
+                      style: TextStyle(color: GameColors.primary, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // ── HP Bar ──
+          HpBar(
+            current: widget.player.hp,
+            max: widget.player.effectiveMaxHp,
+            height: 10,
+            showLabel: true,
+            showNumbers: true,
+          ),
+          const SizedBox(height: 4),
+
+          // ── Credits ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.monetization_on, color: GameColors.gold, size: 12),
+              const SizedBox(width: 3),
+              Text(
+                '${widget.player.credits} Credits',
+                style: TextStyle(
+                  color: GameColors.gold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          // ── Active Status Effects ──
+          if (widget.player.activeStatusEffects.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'STATUS EFFECTS',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  StatusEffectDisplay(
+                    effects: widget.player.activeStatusEffects,
+                    maxHeight: 100,
+                    iconSize: 22,
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Combat Stats Summary ──
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'COMBAT STATS',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                _buildBattleStatRow('⚔️ ATK', '$netAttack', GameColors.primary),
+                _buildBattleStatRow('🛡️ DEF', '$netBlock', GameColors.accent),
+                _buildBattleStatRow(
+                  '💥 CRIT',
+                  '${(netCritChance * 100).toInt()}%',
+                  GameColors.gold,
+                ),
+                if (netLuck > 0)
+                  _buildBattleStatRow('🍀 LUCK', '$netLuck', Colors.lightGreen),
+                if (netLifeSteal > 0)
+                  _buildBattleStatRow(
+                    '🩸 STEAL',
+                    '$netLifeSteal',
+                    Colors.redAccent,
+                  ),
+                if (netThorns > 0)
+                  _buildBattleStatRow('🌵 THORN', '$netThorns', Colors.green),
+              ],
+            ),
+          ),
+
+          // ── Currently Equipped Gear ──
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'EQUIPPED GEAR',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...widget.equippedSlots.asMap().entries.map((entry) {
+                  final item = entry.value;
+                  if (item == null) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '  — empty —',
+                        style: TextStyle(
+                          color: Colors.white24,
+                          fontSize: 9,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    );
+                  }
+                  final color = _rarityColor(item.rarity);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _getSlotIconForBattle(item.type),
+                          color: color,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 3,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: Text(
+                            item.rarity.label.toUpperCase(),
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 7,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+
+          // ── Damage Type Bonuses ──
+          if (netBonusDamage.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildDamageTypeRow(),
+          ],
+
+          // ── Resistances ──
+          if (netResistances.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _buildResistanceRow(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBattleStatRow(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.7),
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getSlotIconForBattle(SlotType type) {
+    switch (type) {
+      case SlotType.weapon:
+        return Icons.flash_on;
+      case SlotType.armor:
+        return Icons.shield;
+      case SlotType.head:
+        return Icons.psychology;
+      case SlotType.item:
+        return Icons.inventory_2;
+    }
+  }
+
+  // ── Shared sub-widgets ──
+
+  Widget _buildHyperBossBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      color: Colors.deepOrange.withValues(alpha: 0.25),
+      child: const Text(
+        '⚡ HYPER BOSS — NO RETREAT ⚡',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.deepOrangeAccent,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.2,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCombatantRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GameImage(
+                  imagePath: widget.player.imagePath,
+                  fallbackIcon: Icons.person,
+                  size: 48,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.player.name,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                HpBar(
+                  current: widget.player.hp,
+                  max: widget.player.maxHp,
+                  height: 8,
+                  showNumbers: true,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.isHyperBoss
+                  ? Colors.deepOrange.withValues(alpha: 0.15)
+                  : (widget.enemy.isBoss
+                        ? GameColors.gold.withValues(alpha: 0.15)
+                        : GameColors.primary.withValues(alpha: 0.15)),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: widget.isHyperBoss
+                    ? Colors.deepOrange.withValues(alpha: 0.6)
+                    : (widget.enemy.isBoss
+                          ? GameColors.gold.withValues(alpha: 0.4)
+                          : GameColors.primary.withValues(alpha: 0.4)),
+              ),
+            ),
+            child: Text(
+              widget.isHyperBoss
+                  ? "HYPER"
+                  : (widget.enemy.isBoss ? "BOSS" : "VS"),
+              style: TextStyle(
+                fontSize: 18,
+                color: widget.isHyperBoss
+                    ? Colors.deepOrangeAccent
+                    : (widget.enemy.isBoss
+                          ? GameColors.gold
+                          : GameColors.primary),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GameImage(
+                  imagePath: widget.enemy.imagePath,
+                  fallbackIcon: widget.enemy.isBoss
+                      ? Icons.psychology
+                      : Icons.adb,
+                  size: 48,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.enemy.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: widget.isHyperBoss
+                        ? Colors.deepOrangeAccent
+                        : (widget.enemy.isBoss ? GameColors.gold : null),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                HpBar(
+                  current: widget.enemy.hp,
+                  max: widget.enemy.maxHp,
+                  height: 8,
+                  showNumbers: true,
+                ),
+                if (widget.enemy.isBoss &&
+                    widget.enemy.mechanic != BossMechanic.none)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      _getMechanicName(widget.enemy.mechanic),
+                      style: TextStyle(
+                        color: GameColors.warning,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatSummary() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: GameColors.surface,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _miniStat(Icons.flash_on, '$netAttack', 'ATK', GameColors.primary),
+            _miniStat(Icons.shield, '$netBlock', 'DEF', GameColors.accent),
+            _miniStat(
+              Icons.bolt,
+              '${(netCritChance * 100).toInt()}%',
+              'CRIT',
+              GameColors.gold,
+            ),
+            if (_battleFinished)
+              _miniStat(
+                Icons.compare_arrows,
+                '$_turns',
+                'TURNS',
+                Colors.white70,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogContainer() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: GameColors.surfaceLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: GameColors.border),
+      ),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(4),
+        itemCount: logs.length,
+        itemBuilder: (context, i) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2.0),
+          child: Text(
+            logs[i],
+            style: TextStyle(
+              color: logs[i].contains('💥')
+                  ? GameColors.gold
+                  : logs[i].contains('✅')
+                  ? GameColors.success
+                  : logs[i].contains('🧪')
+                  ? GameColors.accent
+                  : logs[i].contains('❌')
+                  ? GameColors.danger
+                  : logs[i].contains('🔥')
+                  ? Colors.orangeAccent
+                  : logs[i].contains('❄️')
+                  ? Colors.cyanAccent
+                  : logs[i].contains('☠️')
+                  ? Colors.lightGreen
+                  : logs[i].contains('💀')
+                  ? Colors.deepPurpleAccent
+                  : logs[i].contains('✨')
+                  ? Colors.yellowAccent
+                  : logs[i].contains('🌀')
+                  ? Colors.purpleAccent
+                  : Colors.grey,
+              fontFamily: 'monospace',
+              fontSize: 11,
+            ),
+          ),
         ),
       ),
     );

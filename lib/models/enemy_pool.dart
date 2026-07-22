@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'boss.dart';
 import 'damage_type.dart';
 import 'enemy.dart';
 import 'item.dart';
@@ -523,6 +524,18 @@ class EnemyPool {
         if (_random.nextDouble() < 0.4) {
           return getRandomBossEnemy();
         }
+        pool = graveyardEnemies;
+        break;
+      // ── TIER 5: ENDGAME GUARDIAN ZONES ──
+      case ZoneType.tachyonFaultline:
+      case ZoneType.resonanceFault:
+      case ZoneType.sanguineConduit:
+      case ZoneType.phasmMirage:
+      case ZoneType.zeroGVault:
+      case ZoneType.cryoCompileCrypt:
+      case ZoneType.highForgeMatrix:
+        final guardian = GuardianBosses.getGuardianForZone(zone, week: 1);
+        if (guardian != null) return guardian;
         pool = graveyardEnemies;
         break;
     }

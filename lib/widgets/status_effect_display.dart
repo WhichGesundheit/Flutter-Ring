@@ -126,7 +126,7 @@ class StatusEffectDisplay extends StatelessWidget {
             if (effect.cureMethod != CureMethod.battleOnly)
               _InfoRow(
                 label: 'Cure',
-                value: effect.cureDescription ?? effect.cureMethod.label,
+                value: effect.cureMethod.label,
                 color: Colors.tealAccent,
               ),
             if (effect.cureMethod != CureMethod.battleOnly)

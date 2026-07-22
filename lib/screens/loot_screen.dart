@@ -27,44 +27,51 @@ class _LootScreenState extends State<LootScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<String> stats = [];
-    if (widget.loot.attackBonus > 0) {
-      stats.add("+${widget.loot.attackBonus} ATK");
-    }
-    if (widget.loot.damageReduction > 0) {
-      stats.add("+${widget.loot.damageReduction} Block");
-    }
-    if (widget.loot.lifeSteal > 0) {
-      stats.add("+${widget.loot.lifeSteal} LifeSteal");
-    }
-    if (widget.loot.thorns > 0) {
-      stats.add("+${widget.loot.thorns} Thorns");
-    }
-    if (widget.loot.critChance > 0) {
-      stats.add("+${(widget.loot.critChance * 100).toInt()}% Crit");
-    }
-    if (widget.loot.luckBonus > 0) {
-      stats.add("+${widget.loot.luckBonus} Luck");
-    }
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 500),
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return ScaleTransition(scale: animation, child: child);
-              },
-              child: !_isOpened
-                  ? _buildClosedChestView()
-                  : _buildOpenChestView(stats),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isLandscape ? 450 : double.infinity,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return ScaleTransition(scale: animation, child: child);
+                },
+                child: !_isOpened
+                    ? _buildClosedChestView()
+                    : _buildOpenChestView(stats),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  List<String> get stats {
+    final s = <String>[];
+    if (widget.loot.attackBonus != 0)
+      s.add("+${widget.loot.effectiveAttackBonus} ATK");
+    if (widget.loot.damageReduction != 0)
+      s.add("+${widget.loot.effectiveDamageReduction} DEF");
+    if (widget.loot.critChance != 0)
+      s.add("+${(widget.loot.effectiveCritChance * 100).toInt()}% CRIT");
+    if (widget.loot.lifeSteal != 0)
+      s.add("+${widget.loot.effectiveLifeSteal} Lifesteal");
+    if (widget.loot.thorns != 0)
+      s.add("+${widget.loot.effectiveThorns} Thorns");
+    if (widget.loot.healAmount != 0)
+      s.add("+${widget.loot.effectiveHealAmount} Heal");
+    if (widget.loot.luckBonus != 0)
+      s.add("+${widget.loot.effectiveLuckBonus} Luck");
+    return s;
   }
 
   Widget _buildClosedChestView() {

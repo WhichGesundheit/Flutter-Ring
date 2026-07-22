@@ -4,6 +4,7 @@ import '../models/damage_type.dart';
 import '../models/item.dart';
 import '../models/zone.dart';
 import '../widgets/game_image.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/stylish_popup.dart';
 
 Color rarityColor(Rarity r) {
@@ -992,531 +993,566 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Loadout Processing Node")),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildHeaderInfo() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              "HP: ${widget.player.hp}/${widget.player.maxHp}",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              "Credits: ${widget.player.credits}",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.amber,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              "ATK: ${widget.player.getEffectiveAttack(widget.equippedSlots)}",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpgradeInfoBox() {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // HEADER INFO
-              Container(
-                padding: const EdgeInsets.all(12),
+              Icon(Icons.upgrade, color: Colors.amberAccent, size: 14),
+              SizedBox(width: 6),
+              Text(
+                'UPGRADE SYSTEM',
+                style: TextStyle(
+                  color: Colors.amberAccent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 4),
+          Text(
+            '• Combine 3 same items → +1 upgrade level (+20% stats)\n'
+            '• Infuse weapons with damage types\n'
+            '• Infuse armor with resistances\n'
+            '• Salvage items for credits\n'
+            '• Rarity determines max slots (Common:0, Premium:1, Unique:2, Legendary:3)',
+            style: TextStyle(color: Colors.white38, fontSize: 9, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Equipped section: grid + backpack + save button (portrait layout)
+  Widget _buildEquippedSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildEquippedGrid(),
+        const SizedBox(height: 30),
+        _buildBackpackSection(),
+        const SizedBox(height: 30),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueGrey[900],
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.save),
+          label: const Text(
+            "SAVE MATRIX CONFIGURATION",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          onPressed: widget.onBack,
+        ),
+      ],
+    );
+  }
+
+  /// Equipped grid only (no backpack, used in landscape layout)
+  Widget _buildEquippedGrid() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.shield_rounded, color: Colors.redAccent, size: 18),
+            SizedBox(width: 8),
+            Text(
+              "EQUIPPED MATRIX",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Colors.redAccent,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 2.8,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: widget.player.slotLayout.length,
+          itemBuilder: (ctx, i) {
+            final requiredType = widget.player.slotLayout[i];
+            final activeItem = widget.equippedSlots[i];
+            final itemColor = activeItem != null
+                ? rarityColor(activeItem.rarity)
+                : null;
+
+            return InkWell(
+              onTap: () {
+                if (activeItem != null) {
+                  setState(() {
+                    _selectedEquippedIndex = i;
+                    _selectedInventoryIndex = null;
+                  });
+                  _showInspectDialog(activeItem, isEquipped: true, index: i);
+                }
+              },
+              child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[900],
+                  color: activeItem != null
+                      ? itemColor!.withValues(alpha: 0.1)
+                      : Colors.grey[900],
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _selectedEquippedIndex == i
+                        ? Colors.redAccent
+                        : (activeItem != null
+                              ? itemColor!.withValues(alpha: 0.6)
+                              : Colors.transparent),
+                    width: 1.5,
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
                 ),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        "HP: ${widget.player.hp}/${widget.player.maxHp}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
+                    GameImage(
+                      imagePath: activeItem?.imagePath,
+                      fallbackIcon: _getSlotIcon(requiredType),
+                      size: 32,
                     ),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        "Credits: ${widget.player.credits}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber,
-                          fontSize: 12,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        "ATK: ${widget.player.getEffectiveAttack(widget.equippedSlots)}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.redAccent,
-                          fontSize: 12,
-                        ),
-                        textAlign: TextAlign.end,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            requiredType.name.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 8,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  activeItem?.name ?? "[ Vacant ]",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: activeItem != null
+                                        ? itemColor
+                                        : Colors.grey[600],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (activeItem != null) ...[
+                                const SizedBox(width: 4),
+                                rarityBadge(activeItem.rarity),
+                              ],
+                            ],
+                          ),
+                          if (activeItem != null && activeItem.upgradeLevel > 0)
+                            Text(
+                              '+${activeItem.upgradeLevel} UPGRADED',
+                              style: const TextStyle(
+                                fontSize: 7,
+                                color: Colors.amberAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
+            );
+          },
+        ),
+      ],
+    );
+  }
 
-              // ── UPGRADE INFO BOX ──
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.amber.withValues(alpha: 0.3),
-                  ),
+  Widget _buildBackpackSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.backpack, color: Colors.tealAccent, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "BACKPACK (${widget.inventory.length}/$maxInventorySize)",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Colors.tealAccent,
+                  letterSpacing: 1,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (widget.inventory.isNotEmpty)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: SortType.values.map((sort) {
+                final isSelected = _currentSort == sort;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.upgrade,
-                          color: Colors.amberAccent,
-                          size: 14,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'UPGRADE SYSTEM',
-                          style: TextStyle(
-                            color: Colors.amberAccent,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Icon(sort.icon, size: 12),
+                        const SizedBox(width: 4),
+                        Text(sort.label),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      '• Combine 3 same items → +1 upgrade level (+20% stats)\n'
-                      '• Infuse weapons with damage types\n'
-                      '• Infuse armor with resistances\n'
-                      '• Salvage items for credits\n'
-                      '• Rarity determines max slots (Common:0, Premium:1, Unique:2, Legendary:3)',
-                      style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 9,
-                        height: 1.4,
-                      ),
+                    selected: isSelected,
+                    selectedColor: Colors.tealAccent.withValues(alpha: 0.2),
+                    backgroundColor: Colors.grey[900],
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.tealAccent : Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
+                    onSelected: (selected) {
+                      setState(() => _currentSort = sort);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        const SizedBox(height: 8),
+        if (widget.inventory.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Text(
+                "Storage Bag is currently empty.",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // EQUIPPED MATRIX SECTION
-              const Row(
-                children: [
-                  Icon(Icons.shield_rounded, color: Colors.redAccent, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    "EQUIPPED MATRIX (Tap to Inspect / Unequip)",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.redAccent,
-                      letterSpacing: 1,
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: widget.inventory.length,
+            itemBuilder: (ctx, i) {
+              final sortedIdx = _sortedIndices()[i];
+              final item = widget.inventory[sortedIdx];
+              final sameCount = Item.countSameItem(widget.inventory, item);
+              final itemColor = rarityColor(item.rarity);
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedInventoryIndex = sortedIdx;
+                    _selectedEquippedIndex = null;
+                  });
+                  _showInspectDialog(item, isEquipped: false, index: sortedIdx);
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _selectedInventoryIndex == sortedIdx
+                          ? Colors.tealAccent
+                          : itemColor.withValues(alpha: 0.3),
+                      width: 1.5,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 2.8,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                ),
-                itemCount: widget.player.slotLayout.length,
-                itemBuilder: (ctx, i) {
-                  final requiredType = widget.player.slotLayout[i];
-                  final activeItem = widget.equippedSlots[i];
-                  final itemColor = activeItem != null
-                      ? rarityColor(activeItem.rarity)
-                      : null;
-
-                  return InkWell(
-                    onTap: () {
-                      if (activeItem != null) {
-                        setState(() {
-                          _selectedEquippedIndex = i;
-                          _selectedInventoryIndex = null;
-                        });
-                        _showInspectDialog(
-                          activeItem,
-                          isEquipped: true,
-                          index: i,
-                        );
-                      }
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: activeItem != null
-                            ? itemColor!.withValues(alpha: 0.1)
-                            : Colors.grey[900],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _selectedEquippedIndex == i
-                              ? Colors.redAccent
-                              : (activeItem != null
-                                    ? itemColor!.withValues(alpha: 0.6)
-                                    : Colors.transparent),
-                          width: 1.5,
-                        ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      GameImage(
+                        imagePath: item.imagePath,
+                        fallbackIcon: _getSlotIcon(item.type),
+                        size: 32,
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          GameImage(
-                            imagePath: activeItem?.imagePath,
-                            fallbackIcon: _getSlotIcon(requiredType),
-                            size: 32,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.type.name.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: itemColor.withValues(alpha: 0.7),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Row(
                               children: [
-                                Text(
-                                  requiredType.name.toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: 8,
-                                    color: Colors.grey,
-                                    fontWeight: FontWeight.bold,
+                                Expanded(
+                                  child: Text(
+                                    item.name,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: itemColor,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        activeItem?.name ?? "[ Vacant ]",
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: activeItem != null
-                                              ? itemColor
-                                              : Colors.grey[600],
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (activeItem != null) ...[
-                                      const SizedBox(width: 4),
-                                      rarityBadge(activeItem.rarity),
-                                    ],
-                                  ],
-                                ),
-                                if (activeItem != null &&
-                                    activeItem.upgradeLevel > 0)
+                                const SizedBox(width: 4),
+                                rarityBadge(item.rarity),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                if (item.upgradeLevel > 0)
                                   Text(
-                                    '+${activeItem.upgradeLevel} UPGRADED',
+                                    '+${item.upgradeLevel} ',
                                     style: const TextStyle(
-                                      fontSize: 7,
+                                      fontSize: 8,
                                       color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 30),
-
-              // BACKPACK INVENTORY SECTION
-              Row(
-                children: [
-                  const Icon(
-                    Icons.backpack,
-                    color: Colors.tealAccent,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "BACKPACK (${widget.inventory.length}/$maxInventorySize)",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.tealAccent,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Sort buttons
-              if (widget.inventory.isNotEmpty)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: SortType.values.map((sort) {
-                      final isSelected = _currentSort == sort;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ChoiceChip(
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(sort.icon, size: 12),
-                              const SizedBox(width: 4),
-                              Text(sort.label),
-                            ],
-                          ),
-                          selected: isSelected,
-                          selectedColor: Colors.tealAccent.withValues(
-                            alpha: 0.2,
-                          ),
-                          backgroundColor: Colors.grey[900],
-                          labelStyle: TextStyle(
-                            color: isSelected
-                                ? Colors.tealAccent
-                                : Colors.white54,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          onSelected: (selected) {
-                            setState(() => _currentSort = sort);
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              const SizedBox(height: 8),
-
-              if (widget.inventory.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      "Storage Bag is currently empty.",
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: widget.inventory.length,
-                  itemBuilder: (ctx, i) {
-                    final sortedIdx = _sortedIndices()[i];
-                    final item = widget.inventory[sortedIdx];
-                    final sameCount = Item.countSameItem(
-                      widget.inventory,
-                      item,
-                    );
-                    final itemColor = rarityColor(item.rarity);
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedInventoryIndex = sortedIdx;
-                          _selectedEquippedIndex = null;
-                        });
-                        _showInspectDialog(
-                          item,
-                          isEquipped: false,
-                          index: sortedIdx,
-                        );
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[900],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _selectedInventoryIndex == sortedIdx
-                                ? Colors.tealAccent
-                                : itemColor.withValues(alpha: 0.3),
-                            width: 1.5,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          children: [
-                            GameImage(
-                              imagePath: item.imagePath,
-                              fallbackIcon: _getSlotIcon(item.type),
-                              size: 32,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                                if (sameCount >= 3 &&
+                                    item.type != SlotType.item)
                                   Text(
-                                    item.type.name.toUpperCase(),
-                                    style: TextStyle(
+                                    '★$sameCount',
+                                    style: const TextStyle(
                                       fontSize: 8,
-                                      color: itemColor.withValues(alpha: 0.7),
+                                      color: Colors.amberAccent,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          item.name,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: itemColor,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                if (item.effectiveAttackBonus > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Text(
+                                      '⚔${item.effectiveAttackBonus}',
+                                      style: const TextStyle(
+                                        fontSize: 8,
+                                        color: Colors.redAccent,
                                       ),
-                                      const SizedBox(width: 4),
-                                      rarityBadge(item.rarity),
-                                    ],
+                                    ),
                                   ),
-                                  Row(
-                                    children: [
-                                      if (item.upgradeLevel > 0)
-                                        Text(
-                                          '+${item.upgradeLevel} ',
-                                          style: const TextStyle(
-                                            fontSize: 8,
-                                            color: Colors.amberAccent,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      if (sameCount >= 3 &&
-                                          item.type != SlotType.item)
-                                        Text(
-                                          '★$sameCount',
-                                          style: const TextStyle(
-                                            fontSize: 8,
-                                            color: Colors.amberAccent,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      // Show key stats
-                                      if (item.effectiveAttackBonus > 0)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 4,
-                                          ),
-                                          child: Text(
-                                            '⚔${item.effectiveAttackBonus}',
-                                            style: const TextStyle(
-                                              fontSize: 8,
-                                              color: Colors.redAccent,
-                                            ),
-                                          ),
-                                        ),
-                                      if (item.effectiveDamageReduction > 0)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 4,
-                                          ),
-                                          child: Text(
-                                            '🛡${item.effectiveDamageReduction}',
-                                            style: const TextStyle(
-                                              fontSize: 8,
-                                              color: Colors.cyanAccent,
-                                            ),
-                                          ),
-                                        ),
-                                      if (item.effectiveCritChance > 0)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 4,
-                                          ),
-                                          child: Text(
-                                            '⚡${(item.effectiveCritChance * 100).toInt()}%',
-                                            style: const TextStyle(
-                                              fontSize: 8,
-                                              color: Colors.amberAccent,
-                                            ),
-                                          ),
-                                        ),
-                                      ...item.bonusDamage.entries
-                                          .take(2)
-                                          .map(
-                                            (e) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 2,
-                                              ),
-                                              child: Text(
-                                                e.key.icon,
-                                                style: const TextStyle(
-                                                  fontSize: 8,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ...item.flatResistance.entries
-                                          .take(2)
-                                          .map(
-                                            (e) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 2,
-                                              ),
-                                              child: Text(
-                                                e.key.icon,
-                                                style: const TextStyle(
-                                                  fontSize: 8,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                    ],
+                                if (item.effectiveDamageReduction > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Text(
+                                      '🛡${item.effectiveDamageReduction}',
+                                      style: const TextStyle(
+                                        fontSize: 8,
+                                        color: Colors.cyanAccent,
+                                      ),
+                                    ),
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.chevron_right,
-                              color: Colors.white24,
-                              size: 18,
+                                if (item.effectiveCritChance > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Text(
+                                      '⚡${(item.effectiveCritChance * 100).toInt()}%',
+                                      style: const TextStyle(
+                                        fontSize: 8,
+                                        color: Colors.amberAccent,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
-              const SizedBox(height: 30),
-
-              // SAVE MATRIX CONFIGURATION
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueGrey[900],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: Colors.white24,
+                        size: 18,
+                      ),
+                    ],
                   ),
                 ),
-                icon: const Icon(Icons.save),
-                label: const Text(
-                  "SAVE MATRIX CONFIGURATION",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                onPressed: widget.onBack,
-              ),
-            ],
+              );
+            },
           ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUILD & LAYOUTS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  @override
+  Widget build(BuildContext context) {
+    final isLandscape = Responsive.isLandscape(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text("Loadout Processing Node")),
+      body: isLandscape ? _buildLandscapeLayout() : _buildPortraitLayout(),
+    );
+  }
+
+  Widget _buildPortraitLayout() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeaderInfo(),
+            const SizedBox(height: 10),
+            _buildUpgradeInfoBox(),
+            const SizedBox(height: 20),
+            _buildEquippedSection(),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLandscapeLayout() {
+    final pad = Responsive.horizontalPadding(context);
+    return Row(
+      children: [
+        // ── LEFT: Equipped + Info (no backpack here) ──
+        Expanded(
+          flex: 5,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(pad),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeaderInfo(),
+                const SizedBox(height: 8),
+                _buildUpgradeInfoBox(),
+                const SizedBox(height: 12),
+                _buildEquippedGrid(),
+              ],
+            ),
+          ),
+        ),
+        // ── RIGHT: Backpack ──
+        Expanded(
+          flex: 5,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFF0E1018),
+              border: Border(left: BorderSide(color: Color(0xFF2A2D3E))),
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(pad, pad, pad, 0),
+                    child: _buildBackpackSection(),
+                  ),
+                ),
+                // Back button
+                Padding(
+                  padding: EdgeInsets.fromLTRB(pad, 0, pad, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey[900],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.save),
+                      label: const Text(
+                        "SAVE",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      onPressed: widget.onBack,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

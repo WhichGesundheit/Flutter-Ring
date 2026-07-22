@@ -34,19 +34,24 @@ import 'screens/shop_screen.dart';
 import 'screens/loot_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/game_over_screen.dart';
+import 'screens/node_screen.dart';
 import 'screens/gleed_screen.dart';
 import 'screens/event_screen.dart';
+
+// Import Widgets
+import 'widgets/full_inventory_dialog.dart';
+import 'screens/warehouse_screen.dart';
+import 'screens/bank_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Desktop Window Size Constraints (9:16 Aspect Ratio)
+  // Desktop Window Size – resizable with a reasonable minimum
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
-      size: Size(450, 800),
-      minimumSize: Size(450, 800),
-      maximumSize: Size(450, 800),
+      size: Size(1280, 800),
+      minimumSize: Size(570, 300),
       center: true,
       title: 'Flutter Ring',
     );
@@ -56,10 +61,12 @@ void main() async {
     });
   }
 
-  // Lock mobile viewports strictly to portrait orientation
+  // Allow all orientations for responsive layout
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
   ]);
 
   await Supabase.initialize(
@@ -75,6 +82,7 @@ class FlutterRingGame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Flutter Ring',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF121212),
@@ -117,6 +125,9 @@ class _GameControllerState extends State<GameController> {
   int lastHyperBossDay = -1;
   bool _hyperBossQueued = false;
 
+  // ── Explored zones tracking ──
+  Set<ZoneType> exploredZones = {};
+
   // ── Shop refresh state ──
   int lastShopRefreshHour = -1000;
 
@@ -131,6 +142,10 @@ class _GameControllerState extends State<GameController> {
   // ── Current save state ──
   int? _currentSaveSlot;
   String _saveName = 'Untitled Save';
+
+  // ── Shared warehouse & bank (per save slot) ──
+  WarehouseData _warehouse = WarehouseData();
+  BankData _bank = BankData();
 
   @override
   void initState() {
@@ -196,12 +211,17 @@ class _GameControllerState extends State<GameController> {
   }
 
   /// Called after any `hoursPassed` change. Check for hyper boss.
+  /// Hyper boss only triggers on 7-day milestones when player is in a hub (settlement).
   void _checkForHyperBoss() {
     final currentDay = hoursPassed ~/ 24;
     if (currentDay <= 0) return;
     if (currentDay % 7 != 0) return;
     if (currentDay == lastHyperBossDay) return;
     if (_currentScreen == 'battle') return;
+
+    // Only trigger when player is in a settlement/hub
+    final currentZoneData = Zone.worldMap[currentZone];
+    if (currentZoneData == null || !currentZoneData.isSettlement) return;
 
     lastHyperBossDay = currentDay;
     final boss = WeeklyBosses.getHyperBossForWeek(currentDay ~/ 7);
@@ -215,6 +235,7 @@ class _GameControllerState extends State<GameController> {
   void mapsToZone(ZoneType targetZone) {
     setState(() {
       currentZone = targetZone;
+      exploredZones.add(targetZone);
       hoursPassed += 2;
     });
     merchantManager.rotateLocationsIfDue(hoursPassed);
@@ -233,7 +254,7 @@ class _GameControllerState extends State<GameController> {
       return;
     }
 
-    _rollForRandomEvent(destinationZone: targetZone);
+    _rollForRandomEvent();
     _autoSave();
     _checkForHyperBoss();
 
@@ -242,12 +263,8 @@ class _GameControllerState extends State<GameController> {
     }
   }
 
-  void _rollForRandomEvent({ZoneType? destinationZone}) {
+  void _rollForRandomEvent() {
     if (player == null) return;
-    if (destinationZone != null) {
-      final destData = Zone.worldMap[destinationZone];
-      if (destData != null && destData.isSettlement) return;
-    }
     final currentDay = hoursPassed ~/ 24;
     final luckMod = player!.getEffectiveLuck(equippedSlots).toDouble();
     final event = EventPool.rollForEvent(
@@ -291,11 +308,14 @@ class _GameControllerState extends State<GameController> {
       equippedSlots: equippedSlots,
       inventory: inventory,
       slotLayout: player?.slotLayout.map((s) => s.name).toList() ?? [],
+      warehouse: _warehouse,
+      bank: _bank,
       lastHyperBossDay: lastHyperBossDay,
       lastShopRefreshHour: lastShopRefreshHour,
       lastMerchantRotationHour: lastMerchantRotationHour,
       bossDefeatedDays: bossTracker.defeatedBosses.toList(),
       activeStatusEffects: player?.activeStatusEffects ?? [],
+      exploredZones: exploredZones.map((z) => z.name).toList(),
       cloudRunId: currentRunId?.startsWith('local_') == true
           ? null
           : currentRunId,
@@ -344,6 +364,8 @@ class _GameControllerState extends State<GameController> {
 
       equippedSlots = List<Item?>.from(data.equippedSlots);
       inventory = List<Item>.from(data.inventory);
+      _warehouse = data.warehouse ?? WarehouseData();
+      _bank = data.bank ?? BankData();
       lastHyperBossDay = data.lastHyperBossDay;
       lastShopRefreshHour = data.lastShopRefreshHour;
       lastMerchantRotationHour = data.lastMerchantRotationHour;
@@ -353,6 +375,9 @@ class _GameControllerState extends State<GameController> {
       }
       merchantManager = MerchantManager();
       npcManager = NPCManager();
+      exploredZones = data.exploredZones
+          .map((name) => ZoneType.values.byName(name))
+          .toSet();
       _pendingEvent = null;
       _hyperBossQueued = false;
       shopItems = [];
@@ -364,6 +389,37 @@ class _GameControllerState extends State<GameController> {
     if (_currentSaveSlot == null) return;
     final data = _buildSaveData();
     await _saveManager.saveToSlot(_currentSaveSlot!, data);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INVENTORY FULL SALVAGE DIALOG
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Shows a dialog when inventory is full, allowing the player to salvage
+  /// an existing item to make room for the incoming item.
+  /// Returns true if the incoming item was successfully added.
+  Future<bool> _showFullInventoryDialog(Item incomingItem) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => FullInventoryDialog(
+        incomingItem: incomingItem,
+        inventory: inventory,
+        player: player!,
+        onSalvageDone: () {
+          // Space freed — add the incoming item
+          setState(() {
+            inventory.add(incomingItem);
+          });
+          _autoSave();
+        },
+        onDismiss: () {
+          Navigator.pop(ctx, false);
+        },
+      ),
+    );
+
+    return result == true || inventory.contains(incomingItem);
   }
 
   /// Manual save (from main screen menu). Returns true on success.
@@ -432,7 +488,9 @@ class _GameControllerState extends State<GameController> {
     changeScreen('main');
   }
 
-  void _handleNewGame() {
+  void _handleNewGameWithName(int slot, String name) {
+    _currentSaveSlot = slot;
+    _saveName = name;
     changeScreen('character_select');
   }
 
@@ -448,6 +506,7 @@ class _GameControllerState extends State<GameController> {
     setState(() {
       player = chosenChar;
       currentRunId = 'local_run_${DateTime.now().millisecondsSinceEpoch}';
+      inventory = [];
       equippedSlots = List.filled(chosenChar.slotLayout.length, null);
       equippedSlots[startingSlotIdx] = chosenChar.startingItem;
       bossTracker = BossEncounterTracker();
@@ -459,11 +518,180 @@ class _GameControllerState extends State<GameController> {
       lastShopRefreshHour = -1000;
       lastMerchantRotationHour = -1000;
       shopItems = [];
+      exploredZones = {ZoneType.town};
+      _warehouse = WarehouseData();
+      _bank = BankData();
     });
 
     // Save to the selected slot
     _saveToNewSlot(slot, _saveName);
     changeScreen('main');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FLOATING PANELS (Bank & Warehouse in landscape)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  bool _isLandscape(BuildContext context) {
+    return MediaQuery.of(context).orientation == Orientation.landscape;
+  }
+
+  Widget _buildBankScreen() {
+    return Builder(
+      builder: (context) {
+        if (_isLandscape(context)) {
+          // Show main screen behind, with floating bank overlay
+          return Stack(
+            children: [
+              MainScreen(
+                player: player!,
+                hoursPassed: hoursPassed,
+                currentZone: currentZone,
+                equippedSlots: equippedSlots,
+                inventory: inventory,
+                onChangeScreen: changeScreen,
+                onSave: _manualSave,
+                onSyncCloud: _authService.isLoggedIn ? _syncToCloud : null,
+                saveSlot: _currentSaveSlot,
+                onQuitToTitle: () {
+                  _autoSave();
+                  changeScreen('save_manager');
+                },
+              ),
+              // Floating bank panel
+              GestureDetector(
+                onTap: () {}, // Absorb taps on backdrop
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 480,
+                        maxHeight: 500,
+                      ),
+                      child: BankScreen(
+                        bank: _bank,
+                        playerCredits: player!.credits,
+                        currentDay: hoursPassed ~/ 24,
+                        onBankChanged: (bank) {
+                          setState(() => _bank = bank);
+                          _autoSave();
+                        },
+                        onCreditsChanged: (delta) {
+                          setState(() => player!.credits += delta);
+                          _autoSave();
+                        },
+                        onBack: () => changeScreen('main'),
+                        isFloating: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+        // Portrait: full screen
+        return BankScreen(
+          bank: _bank,
+          playerCredits: player!.credits,
+          currentDay: hoursPassed ~/ 24,
+          onBankChanged: (bank) {
+            setState(() => _bank = bank);
+            _autoSave();
+          },
+          onCreditsChanged: (delta) {
+            setState(() => player!.credits += delta);
+            _autoSave();
+          },
+          onBack: () => changeScreen('main'),
+        );
+      },
+    );
+  }
+
+  Widget _buildWarehouseScreen() {
+    return Builder(
+      builder: (context) {
+        if (_isLandscape(context)) {
+          // Show main screen behind, with floating warehouse overlay
+          return Stack(
+            children: [
+              MainScreen(
+                player: player!,
+                hoursPassed: hoursPassed,
+                currentZone: currentZone,
+                equippedSlots: equippedSlots,
+                inventory: inventory,
+                onChangeScreen: changeScreen,
+                onSave: _manualSave,
+                onSyncCloud: _authService.isLoggedIn ? _syncToCloud : null,
+                saveSlot: _currentSaveSlot,
+                onQuitToTitle: () {
+                  _autoSave();
+                  changeScreen('save_manager');
+                },
+              ),
+              // Floating warehouse panel
+              GestureDetector(
+                onTap: () {}, // Absorb taps on backdrop
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 480,
+                        maxHeight: 500,
+                      ),
+                      child: WarehouseScreen(
+                        warehouse: _warehouse,
+                        playerInventory: inventory,
+                        maxPlayerInventory: maxInventorySize,
+                        playerCredits: player!.credits,
+                        onWarehouseChanged: (wh) {
+                          setState(() => _warehouse = wh);
+                          _autoSave();
+                        },
+                        onInventoryChanged: (inv) {
+                          setState(() => inventory = inv);
+                          _autoSave();
+                        },
+                        onCreditsChanged: (delta) {
+                          setState(() => player!.credits += delta);
+                          _autoSave();
+                        },
+                        onBack: () => changeScreen('main'),
+                        isFloating: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+        // Portrait: full screen
+        return WarehouseScreen(
+          warehouse: _warehouse,
+          playerInventory: inventory,
+          maxPlayerInventory: maxInventorySize,
+          playerCredits: player!.credits,
+          onWarehouseChanged: (wh) {
+            setState(() => _warehouse = wh);
+            _autoSave();
+          },
+          onInventoryChanged: (inv) {
+            setState(() => inventory = inv);
+            _autoSave();
+          },
+          onCreditsChanged: (delta) {
+            setState(() => player!.credits += delta);
+            _autoSave();
+          },
+          onBack: () => changeScreen('main'),
+        );
+      },
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -481,7 +709,7 @@ class _GameControllerState extends State<GameController> {
       case 'save_manager':
         return SaveManagerScreen(
           onLoadSave: _handleLoadSave,
-          onNewGame: _handleNewGame,
+          onNewGame: _handleNewGameWithName,
           showBackButton: _authService.isLoggedIn,
           onBack: () => changeScreen('login'),
         );
@@ -493,6 +721,7 @@ class _GameControllerState extends State<GameController> {
           hoursPassed: hoursPassed,
           currentZone: currentZone,
           equippedSlots: equippedSlots,
+          inventory: inventory,
           onChangeScreen: changeScreen,
           onSave: _manualSave,
           onSyncCloud: _authService.isLoggedIn ? _syncToCloud : null,
@@ -510,6 +739,8 @@ class _GameControllerState extends State<GameController> {
           bossTracker: bossTracker,
           merchantManager: merchantManager,
           npcManager: npcManager,
+          inventory: inventory,
+          maxInventorySize: maxInventorySize,
           onZoneTravel: mapsToZone,
           onAction: (type, data, cost) {
             setState(() {
@@ -522,15 +753,24 @@ class _GameControllerState extends State<GameController> {
                 changeScreen('shop');
               } else if (type == 'Gleed') {
                 changeScreen('gleed');
+              } else if (type == 'CureGleed') {
+                setState(() {
+                  player!.attemptGamblingCure();
+                });
               } else if (type == 'Loot') {
                 foundLoot = data;
                 changeScreen('loot');
               } else if (type == 'BuyItem') {
                 if (inventory.length < maxInventorySize) {
                   inventory.add(data);
+                } else {
+                  _showFullInventoryDialog(data);
                 }
               } else if (type == 'Heal') {
                 player!.hp = player!.maxHp;
+                // Cure resting-curable status effects (bleeding, burn, poison, etc.)
+                player!.attemptCure(CureMethod.resting);
+                player!.removeExpiredEffects();
               } else if (type == 'Empty') {
                 _rollForRandomEvent();
               } else if (type == 'Camp') {
@@ -542,6 +782,9 @@ class _GameControllerState extends State<GameController> {
                   player!.processHourlyEffects();
                   player!.removeExpiredEffects();
                 }
+                // Cure resting-curable status effects (bleeding, burn, poison, etc.)
+                player!.attemptCure(CureMethod.resting);
+                player!.removeExpiredEffects();
               }
             });
             _autoSave();
@@ -572,6 +815,8 @@ class _GameControllerState extends State<GameController> {
                   for (final item in remaining) {
                     if (inventory.length < maxInventorySize) {
                       inventory.add(item);
+                    } else {
+                      _showFullInventoryDialog(item);
                     }
                   }
                 }
@@ -585,6 +830,29 @@ class _GameControllerState extends State<GameController> {
             }
           },
         );
+      case 'node_screen':
+        final zoneData = Zone.worldMap[currentZone]!;
+        final merchantsHere = merchantManager.getMerchantsAt(currentZone);
+        return NodeScreen(
+          currentZone: currentZone,
+          onScout: () => changeScreen('travel'),
+          onInventory: () => changeScreen('inventory'),
+          onBank: zoneData.isSettlement ? () => changeScreen('bank') : null,
+          onWarehouse: zoneData.isSettlement
+              ? () => changeScreen('warehouse')
+              : null,
+          onShop: merchantsHere.isNotEmpty
+              ? () {
+                  shopItems = merchantsHere.first.getStock(hoursPassed);
+                  changeScreen('shop');
+                }
+              : null,
+          onBack: () => changeScreen('main'),
+        );
+      case 'bank':
+        return _buildBankScreen();
+      case 'warehouse':
+        return _buildWarehouseScreen();
       case 'inventory':
         return InventoryScreen(
           player: player!,
@@ -626,21 +894,30 @@ class _GameControllerState extends State<GameController> {
           loot: foundLoot!,
           inventoryCount: inventory.length,
           maxInventory: maxInventorySize,
-          onExtract: () {
-            setState(() {
-              bool equipped = false;
-              for (int i = 0; i < player!.slotLayout.length; i++) {
-                if (player!.slotLayout[i] == foundLoot!.type &&
-                    equippedSlots[i] == null) {
+          onExtract: () async {
+            // Try to auto-equip first
+            bool equipped = false;
+            for (int i = 0; i < player!.slotLayout.length; i++) {
+              if (player!.slotLayout[i] == foundLoot!.type &&
+                  equippedSlots[i] == null) {
+                setState(() {
                   equippedSlots[i] = foundLoot!;
-                  equipped = true;
-                  break;
-                }
+                });
+                equipped = true;
+                break;
               }
-              if (!equipped) {
-                inventory.add(foundLoot!);
+            }
+            if (!equipped) {
+              if (inventory.length < maxInventorySize) {
+                // Space available — add directly
+                setState(() {
+                  inventory.add(foundLoot!);
+                });
+              } else {
+                // Inventory full — show salvage dialog
+                await _showFullInventoryDialog(foundLoot!);
               }
-            });
+            }
             _autoSave();
             changeScreen('main');
           },
@@ -747,6 +1024,8 @@ class _GameControllerState extends State<GameController> {
               for (final item in result.itemsGained) {
                 if (inventory.length < maxInventorySize) {
                   inventory.add(item);
+                } else {
+                  _showFullInventoryDialog(item);
                 }
               }
 
@@ -785,6 +1064,7 @@ class _GameControllerState extends State<GameController> {
               lastShopRefreshHour = -1000;
               lastMerchantRotationHour = -1000;
               shopItems = [];
+              exploredZones = {};
               _currentSaveSlot = null;
               _saveName = 'Untitled Save';
               _currentScreen = 'save_manager';

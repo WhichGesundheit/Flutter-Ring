@@ -35,7 +35,7 @@ class GameColors {
 // ═══════════════════════════════════════════════════════════════════════════════
 // HP BAR – animated health bar with color coding
 // ═══════════════════════════════════════════════════════════════════════════════
-class HpBar extends StatelessWidget {
+class HpBar extends StatefulWidget {
   final int current;
   final int max;
   final double height;
@@ -51,6 +51,53 @@ class HpBar extends StatelessWidget {
     this.showNumbers = true,
   });
 
+  @override
+  State<HpBar> createState() => _HpBarState();
+}
+
+class _HpBarState extends State<HpBar> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+  double _previousFraction = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    final initialFraction = widget.max > 0
+        ? (widget.current / widget.max).clamp(0.0, 1.0)
+        : 0.0;
+    _animation = AlwaysStoppedAnimation(initialFraction);
+    _previousFraction = initialFraction;
+  }
+
+  @override
+  void didUpdateWidget(covariant HpBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current != widget.current || oldWidget.max != widget.max) {
+      final newFraction = widget.max > 0
+          ? (widget.current / widget.max).clamp(0.0, 1.0)
+          : 0.0;
+      _animation = Tween<double>(
+        begin: _previousFraction,
+        end: newFraction,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+      _previousFraction = newFraction;
+      _controller
+        ..reset()
+        ..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   Color _hpColor(double fraction) {
     if (fraction > 0.6) return GameColors.success;
     if (fraction > 0.3) return GameColors.warning;
@@ -59,75 +106,80 @@ class HpBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fraction = max > 0 ? (current / max).clamp(0.0, 1.0) : 0.0;
-    final color = _hpColor(fraction);
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        final fraction = _animation.value;
+        final color = _hpColor(fraction);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (showLabel)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              'HP',
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
-        Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Container(
-                height: height,
-                decoration: BoxDecoration(
-                  color: Colors.grey[850],
-                  borderRadius: BorderRadius.circular(height / 2),
-                  border: Border.all(color: Colors.grey[800]!, width: 0.5),
+            if (widget.showLabel)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'HP',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(height / 2),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: fraction,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [color, color.withValues(alpha: 0.7)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: color.withValues(alpha: 0.4),
-                            blurRadius: 6,
-                            spreadRadius: 1,
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: widget.height,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[850],
+                      borderRadius: BorderRadius.circular(widget.height / 2),
+                      border: Border.all(color: Colors.grey[800]!, width: 0.5),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(widget.height / 2),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: fraction,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [color, color.withValues(alpha: 0.7)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.4),
+                                blurRadius: 6,
+                                spreadRadius: 1,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                if (widget.showNumbers) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '${widget.current}/${widget.max}',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            if (showNumbers) ...[
-              const SizedBox(width: 8),
-              Text(
-                '$current/$max',
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

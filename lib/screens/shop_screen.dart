@@ -3,6 +3,7 @@ import '../models/character.dart';
 import '../models/damage_type.dart';
 import '../models/item.dart';
 import '../widgets/game_image.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/stylish_popup.dart';
 import '../widgets/game_theme.dart';
 

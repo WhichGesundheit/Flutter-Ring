@@ -1065,6 +1065,117 @@ class Item {
     ),
   ];
 
+  // ── FLUTTER-RING LEGENDARY DROPS (7 rings, dropped by endgame guardians) ──
+  static final List<Item> flutterRings = [
+    // 1. Flutter-Ring: Flicker (Hasted / Madness)
+    Item(
+      id: 'flutter_ring_flicker',
+      name: 'Flutter-Ring: Flicker',
+      type: SlotType.item,
+      description:
+          'A brass band holding an unstable, erratic gemstone that constantly shifts '
+          'out of phase. It vibrates with a manic, high-frequency hum, causing the '
+          'wearer\'s movements to blur across the battlefield while fracturing their '
+          'linear perception of reality.',
+      cost: 200,
+      critChance: 0.20,
+      luckBonus: 6,
+      attackBonus: 4,
+      rarity: Rarity.legendary,
+    ),
+    // 2. Flutter-Ring: Shudder (Empowered / Vulnerability)
+    Item(
+      id: 'flutter_ring_shudder',
+      name: 'Flutter-Ring: Shudder',
+      type: SlotType.item,
+      description:
+          'Forged from brittle, pitch-black meteoric iron, this heavy ring trembles '
+          'violently against the wearer\'s finger. It channels a terrifying, explosive '
+          'kinetic energy into every strike, but leaves the wearer structurally exposed, '
+          'trembling from the sheer impact.',
+      cost: 200,
+      attackBonus: 12,
+      damageReduction: -4,
+      rarity: Rarity.legendary,
+    ),
+    // 3. Flutter-Ring: Arrhythmia (LifeStealAura / Corruption)
+    Item(
+      id: 'flutter_ring_arrhythmia',
+      name: 'Flutter-Ring: Arrhythmia',
+      type: SlotType.item,
+      description:
+          'Crafted from pulsing, organic crimson glass that syncs with the user\'s '
+          'heartbeat. It forces the cardiovascular system into a desperate, erratic '
+          'sprint—allowing the wearer to aggressively siphon the lifeforce of enemies '
+          'they cut down, even as the artifact slowly liquefies their own internal vitality.',
+      cost: 200,
+      lifeSteal: 10,
+      rarity: Rarity.legendary,
+    ),
+    // 4. Flutter-Ring: Waver (Blessed / Weakened)
+    Item(
+      id: 'flutter_ring_waver',
+      name: 'Flutter-Ring: Waver',
+      type: SlotType.item,
+      description:
+          'An ethereal, translucent band that constantly bends ambient light, shimmering '
+          'like a desert mirage. It aligns the tides of destiny to grant uncanny fortune '
+          'and historic critical strikes, though it turns the physical force behind your '
+          'blows soft and unassured.',
+      cost: 200,
+      critChance: 0.30,
+      luckBonus: 10,
+      attackBonus: -3,
+      rarity: Rarity.legendary,
+    ),
+    // 5. Flutter-Ring: Hover (ShieldAura / Paralyzed)
+    Item(
+      id: 'flutter_ring_hover',
+      name: 'Flutter-Ring: Hover',
+      type: SlotType.item,
+      description:
+          'An unnaturally dense gravity-ring that suspends the wearer a mere fraction '
+          'of an inch above the ground. It projects a hummed, impenetrable kinetic '
+          'barrier around them, but the heavy atmospheric field frequently locks their '
+          'joints in a state of sudden, localized stasis.',
+      cost: 200,
+      damageReduction: 10,
+      rarity: Rarity.legendary,
+    ),
+    // 6. Flutter-Ring: Chrysalis (Regeneration / Frozen)
+    Item(
+      id: 'flutter_ring_chrysalis',
+      name: 'Flutter-Ring: Chrysalis',
+      type: SlotType.item,
+      description:
+          'Wrapped in calcified, calcined silk layers that feel freezing cold to the '
+          'touch. The ring acts as a protective, living cocoon that continuously mends '
+          'flesh and seals wounds, but the heavy metabolic toll periodically traps the '
+          'wearer in an icy, rigid slumber.',
+      cost: 200,
+      healAmount: 80,
+      hpThreshold: 0.99,
+      rarity: Rarity.legendary,
+    ),
+    // 7. Flutter-Ring: Caprice (LuckyBonus / Cursed)
+    Item(
+      id: 'flutter_ring_caprice',
+      name: 'Flutter-Ring: Caprice',
+      type: SlotType.item,
+      description:
+          'A shimmering, pearlescent band that sports an eye that seems to blink '
+          'when unobserved. It treats life as a high-stakes game, manipulating the '
+          'universe to drop legendary fortunes and perfect strokes of luck, while '
+          'wrapping a dark, percentage-draining hex around the wearer\'s baseline attributes.',
+      cost: 250,
+      luckBonus: 15,
+      critChance: 0.15,
+      attackBonus: -2,
+      damageReduction: -2,
+      rarity: Rarity.legendary,
+    ),
+  ];
+
   static List<Item> get chestLootPool => _commonItems.toList(growable: false);
 
   static List<Item> get shopLootPool => _commonItems.toList(growable: false);

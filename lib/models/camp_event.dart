@@ -2508,6 +2508,1327 @@ class CampEventPool {
         ),
       ],
     ),
+    // ── 17. Midnight Transaction ──
+    RandomEvent(
+      id: 'midnight_transaction',
+      title: 'Midnight Transaction',
+      artPlaceholder: '💰',
+      flavorText:
+          'A shadowy figure approaches your camp. "I have information '
+          'that could save your life," they whisper.',
+      spawnWeight: 0.8,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '💰 Pay 30 credits for info',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Valuable Intel!',
+              resultArt: '💰',
+              resultDescription: 'The figure reveals a hidden merchant route.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Scammed!',
+              resultArt: '😤',
+              resultDescription: 'The information is worthless.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: -30),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Threaten them',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Intimidated!',
+              resultArt: '⚔️',
+              resultDescription: 'Your threat works. Valuable intel in hand.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 45),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Ambush!',
+              resultArt: '💥',
+              resultDescription: 'Their backup attacks from the shadows.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🚫 Send them away',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Dismissed',
+              resultArt: '🚫',
+              resultDescription: 'The figure retreats.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 18. Automated Repair Drone ──
+    RandomEvent(
+      id: 'repair_drone',
+      title: 'Automated Repair Drone',
+      artPlaceholder: '🔧',
+      flavorText:
+          'A small repair drone descends and waits for permission to begin repairs.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🔧 Let it repair your gear',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Gear Repaired!',
+              resultArt: '🔧',
+              resultDescription: 'The drone expertly repairs minor damage.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 12)],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Have it reinforce armor',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Armor Enhanced!',
+              resultArt: '🛡️',
+              resultDescription: 'The drone adds reinforcement plating.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Malfunction!',
+              resultArt: '💥',
+              resultDescription:
+                  'The drone malfunctions and damages your armor.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Let it guard while you sleep',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Guarded Rest',
+              resultArt: '😴',
+              resultDescription: 'The drone watches over you as you sleep.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 10)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 19. Night Watchman ──
+    RandomEvent(
+      id: 'night_watchman',
+      title: 'The Night Watchman',
+      artPlaceholder: '👁️',
+      flavorText:
+          'A massive sentinel patrols near your camp. It hasn\'t noticed you yet.',
+      spawnWeight: 0.7,
+      minDay: 2,
+      choices: [
+        EventChoice(
+          text: '💻 Hack its patrol route',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Hijacked!',
+              resultArt: '💻',
+              resultDescription:
+                  'You reprogram the sentinel to guard your camp.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 10),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Alarm Triggered!',
+              resultArt: '🚨',
+              resultDescription: 'The sentinel detects your intrusion.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Ambush it for parts',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 8),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Sentinel Destroyed!',
+              resultArt: '⚔️',
+              resultDescription: 'Its components are valuable.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 50),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Outmatched!',
+              resultArt: '💥',
+              resultDescription: 'The sentinel injures you before you retreat.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Sleep through it',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Unnoticed!',
+              resultArt: '😴',
+              resultDescription: 'The sentinel passes without detecting you.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 10)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 20. Campfire Ghost Story ──
+    RandomEvent(
+      id: 'ghost_story',
+      title: 'Campfire Ghost Story',
+      artPlaceholder: '👻',
+      flavorText:
+          'Other runners share tales of "The Corrupted" — ghost-like entities.',
+      spawnWeight: 1.0,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '👻 Listen carefully',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Knowledge Gained!',
+              resultArt: '👻',
+              resultDescription:
+                  'The stories contain useful info about ghost enemies.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.resistanceBoost,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Paranoid!',
+              resultArt: '😵',
+              resultDescription: 'You spend the night paranoid.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.vulnerability,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Share your battle story',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Respect Earned!',
+              resultArt: '⚔️',
+              resultDescription: 'The runners share supplies with you.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 25),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.empowered,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Fall asleep mid-story',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Early Sleep',
+              resultArt: '😴',
+              resultDescription: 'At least you\'re well-rested.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 10)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 21. The Wandering Cat ──
+    RandomEvent(
+      id: 'wandering_cat',
+      title: 'The Wandering Cat',
+      artPlaceholder: '🐱',
+      flavorText:
+          'A robotic cat with glowing eyes pads into your camp and settles by the fire.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🐱 Pet the cat',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Comforted!',
+              resultArt: '🐱',
+              resultDescription: 'The cat\'s purring heals minor damage.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 10),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🔧 Examine its tech',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Tech Analysis!',
+              resultArt: '🔧',
+              resultDescription:
+                  'You learn something new from its internal tech.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 20),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Scratched!',
+              resultArt: '🐱',
+              resultDescription: 'The cat doesn\'t like being examined.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍎 Share rations',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Friend Made!',
+              resultArt: '🐱',
+              resultDescription: 'The cat shares a small data-chip.',
+              effects: [EventEffect(type: EventEffectType.itemGain)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 22. Supply Drop ──
+    RandomEvent(
+      id: 'supply_drop',
+      title: 'Supply Drop',
+      artPlaceholder: '📦',
+      flavorText:
+          'A supply pod crashes nearby, its parachute tangled in the digital trees.',
+      spawnWeight: 0.6,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '💪 Break into the pod',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Military Supplies!',
+              resultArt: '📦',
+              resultDescription: 'The pod contains military-grade supplies.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Security Lock!',
+              resultArt: '🚫',
+              resultDescription: 'The pod\'s security system zaps you.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🔧 Hack the lock',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Pod Hacked!',
+              resultArt: '🔓',
+              resultDescription: 'Premium supplies inside.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 45),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Lockout!',
+              resultArt: '🚫',
+              resultDescription: 'The pod locks down permanently.',
+              effects: [],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '📋 Mark for later',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Location Noted!',
+              resultArt: '📋',
+              resultDescription: 'You mark the location for later.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 23. The Dream ──
+    RandomEvent(
+      id: 'the_dream',
+      title: 'The Dream',
+      artPlaceholder: '💭',
+      flavorText:
+          'You dream of the Ring as it was before — a pristine digital paradise.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '💭 Embrace the dream',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Vision Clarity!',
+              resultArt: '💭',
+              resultDescription: 'The dream enhances your perception.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.blessed,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Fight the dream',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Nightmare Conquered!',
+              resultArt: '⚔️',
+              resultDescription: 'The resistance strengthens your will.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 1,
+                  description: '+1 ATK (permanent)',
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Sleep deeper',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Deep Rest',
+              resultArt: '😴',
+              resultDescription: 'You sleep soundly through the night.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 15)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 24. Perimeter Breach ──
+    RandomEvent(
+      id: 'perimeter_breach',
+      title: 'Perimeter Breach',
+      artPlaceholder: '🚨',
+      flavorText:
+          'Motion sensors detect movement. Multiple heat signatures closing in.',
+      spawnWeight: 0.8,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '⚔️ Fight them off',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Attackers Repelled!',
+              resultArt: '⚔️',
+              resultDescription: 'Their gear is worth looting.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 40),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Overwhelmed!',
+              resultArt: '💥',
+              resultDescription: 'You drive them off but take damage.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Fortify and hold',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Defense Held!',
+              resultArt: '🛡️',
+              resultDescription: 'They leave supplies behind.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Breached!',
+              resultArt: '💥',
+              resultDescription: 'They break through your defenses.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Set a trap',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Trap Sprung!',
+              resultArt: '🍀',
+              resultDescription: 'Easy loot from the trapped attackers.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 50),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Failed Trap!',
+              resultArt: '💥',
+              resultDescription:
+                  'The trap only catches one. The rest swarm you.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 25. Wandering Bard ──
+    RandomEvent(
+      id: 'wandering_bard',
+      title: 'The Wandering Bard',
+      artPlaceholder: '🎶',
+      flavorText: 'A runner with a makeshift instrument approaches your camp.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🎶 Request a song',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Inspiring Melody!',
+              resultArt: '🎶',
+              resultDescription: 'The bard plays a rousing tune.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.empowered,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 8),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '💰 Tip them 15 credits',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Grateful Bard!',
+              resultArt: '💰',
+              resultDescription:
+                  'The bard shares rumors about nearby treasure.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 25),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Enjoy the music and sleep',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Peaceful Rest',
+              resultArt: '🎶',
+              resultDescription: 'The music lulls you to sleep.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 12)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 26. Campfire Training ──
+    RandomEvent(
+      id: 'campfire_training',
+      title: 'Campfire Training',
+      artPlaceholder: '⚔️',
+      flavorText: 'Another runner challenges you to a friendly sparring match.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Accept the challenge',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Training Victory!',
+              resultArt: '⚔️',
+              resultDescription: 'Your combat skills improve.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 1,
+                  description: '+1 ATK (permanent)',
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Spar Loss!',
+              resultArt: '🩸',
+              resultDescription: 'The runner is faster than expected.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: -8)],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Practice defense',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Defense Drills!',
+              resultArt: '🛡️',
+              resultDescription: 'Your defense improves.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '📚 Watch and learn',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Observation!',
+              resultArt: '📚',
+              resultDescription: 'You pick up useful tips.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 27. Night Market ──
+    RandomEvent(
+      id: 'night_market',
+      title: 'The Night Market',
+      artPlaceholder: '🏪',
+      flavorText: 'A pop-up market materializes nearby with rare goods.',
+      spawnWeight: 0.6,
+      minDay: 2,
+      choices: [
+        EventChoice(
+          text: '💰 Browse the wares (20c)',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Rare Purchase!',
+              resultArt: '🏪',
+              resultDescription: 'You find a rare item at a bargain.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: -20),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Overcharged!',
+              resultArt: '😤',
+              resultDescription: 'The vendor overcharges you for junk.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: -20),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🔍 Look for deals',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Bargain Found!',
+              resultArt: '🔍',
+              resultDescription: 'You haggle and get a free sample.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 15),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🚶 Window shop only',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Window Shopping',
+              resultArt: '🚶',
+              resultDescription: 'The vendors share a free tip.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 28. Healing Stream ──
+    RandomEvent(
+      id: 'healing_stream',
+      title: 'The Healing Stream',
+      artPlaceholder: '💧',
+      flavorText:
+          'You discover a stream of luminous data-water with healing properties.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '💧 Drink deeply',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Fully Healed!',
+              resultArt: '💧',
+              resultDescription: 'The water heals your wounds completely.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 25)],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Overdose!',
+              resultArt: '😵',
+              resultDescription:
+                  'Too much data-water. Systems reject the excess.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -5),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.vulnerability,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '💧 Take a sip',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Refreshed!',
+              resultArt: '💧',
+              resultDescription: 'A small sip heals some damage.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 12)],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '📦 Bottle some for later',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Bottled!',
+              resultArt: '📦',
+              resultDescription: 'You bottle the healing water for later.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 29. The Chrome Moss ──
+    RandomEvent(
+      id: 'chrome_moss',
+      title: 'The Chrome Moss',
+      artPlaceholder: '🌿',
+      flavorText:
+          'Bioluminescent moss grows nearby, pulsing with organic data-processing power.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Harvest aggressively',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Moss Harvested!',
+              resultArt: '🌿',
+              resultDescription: 'Rare biological processors worth a fortune.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 45),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Spore Cloud!',
+              resultArt: '🤧',
+              resultDescription: 'Toxic spores released.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.poison,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Use it for healing',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Healed!',
+              resultArt: '💚',
+              resultDescription: 'The moss\'s nanites repair your systems.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 25),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.regeneration,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🚶 Let it grow',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Natural Beauty',
+              resultArt: '🌿',
+              resultDescription:
+                  'The moss provides gentle light through the night.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.blessed,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 30. The Winding Path ──
+    RandomEvent(
+      id: 'winding_path',
+      title: 'The Winding Path',
+      artPlaceholder: '🛤️',
+      flavorText:
+          'A narrow path leads from your camp deeper into unexplored territory.',
+      spawnWeight: 1.0,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '⚔️ Follow the path',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Path Discovery!',
+              resultArt: '🛤️',
+              resultDescription: 'The path leads to a hidden cache.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 35),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Ambush!',
+              resultArt: '🩸',
+              resultDescription: 'Creatures attack from both sides.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Scout cautiously',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Safe Exploration!',
+              resultArt: '🔍',
+              resultDescription: 'You find hidden traps and supplies.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Trap Sprung!',
+              resultArt: '💥',
+              resultDescription: 'A trap catches you off guard.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Stay in camp',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Safe Night',
+              resultArt: '😴',
+              resultDescription: 'The night passes uneventfully.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 31. The Iron Bird ──
+    RandomEvent(
+      id: 'iron_bird',
+      title: 'The Iron Bird',
+      artPlaceholder: '🦅',
+      flavorText:
+          'A metallic bird lands nearby, holding something shiny in its beak.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Catch it',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Iron Bird Caught!',
+              resultArt: '🦅',
+              resultDescription: 'You claim its rare data-crystal.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Swooped!',
+              resultArt: '🩸',
+              resultDescription: 'The bird attacks with razor feathers.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Befriend it',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Bird Friend!',
+              resultArt: '🦅',
+              resultDescription: 'The bird drops its treasure at your feet.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '👁️ Watch it',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Bird Departed',
+              resultArt: '🦅',
+              resultDescription: 'The bird watches, then flies away.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 32. Ground Tremor ──
+    RandomEvent(
+      id: 'ground_tremor',
+      title: 'Ground Tremor',
+      artPlaceholder: '🌍',
+      flavorText:
+          'The ground shakes. Cracks appear, revealing ancient structures below.',
+      spawnWeight: 0.8,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '💪 Descend into the cracks',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Underground Discovery!',
+              resultArt: '🌍',
+              resultDescription: 'You find a sealed chamber with artifacts.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 50),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Collapse!',
+              resultArt: '💥',
+              resultDescription: 'The cracks collapse. You escape injured.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Reinforce the ground',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Stabilized!',
+              resultArt: '🛡️',
+              resultDescription: 'The cracks reveal salvageable components.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 35),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🏃 Move camp',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Camp Relocated',
+              resultArt: '🏃',
+              resultDescription: 'You move to safer ground.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 33. Luminous Dragonfly ──
+    RandomEvent(
+      id: 'luminous_dragonfly',
+      title: 'The Luminous Dragonfly',
+      artPlaceholder: '✨',
+      flavorText:
+          'A dragonfly of pure light hovers before you, leaving trails of data-particles.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Capture its light essence',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Light Captured!',
+              resultArt: '✨',
+              resultDescription: 'Your attack power increases.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 2,
+                  description: '+2 ATK (permanent)',
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Blinded!',
+              resultArt: '😵',
+              resultDescription: 'The dragonfly releases a blinding flash.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.vulnerability,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: -8),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Let it heal you',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Light Healing!',
+              resultArt: '💚',
+              resultDescription: 'The light mends your systems.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 25)],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '👁️ Watch it dance',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Mesmerized',
+              resultArt: '✨',
+              resultDescription: 'The dragonfly fills you with peace.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.blessed,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 10),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 16. The Campfire Melody ──
+    RandomEvent(
+      id: 'campfire_melody',
+      title: 'The Campfire Melody',
+      artPlaceholder: '🎵',
+      flavorText:
+          'As the campfire crackles, you hear a faint melody carried on '
+          'the wind. The tune is hauntingly beautiful, resonating with your neural implants.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🎵 Hum along',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Harmonic Resonance!',
+              resultArt: '🎵',
+              resultDescription:
+                  'Your humming creates a harmonic resonance that enhances your combat subroutines.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 1,
+                  description: '+1 ATK (permanent)',
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '😴 Let it lull you to sleep',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Deep Rest',
+              resultArt: '😴',
+              resultDescription:
+                  'The melody guides you into a deep, restorative sleep.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: 15)],
+            ),
+          ],
+        ),
+      ],
+    ),
   ];
 
   /// Pick a random camp event

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item.dart';
 import '../models/status_effect.dart';
+import '../screens/warehouse_screen.dart';
+import '../screens/bank_screen.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════════════
 /// SAVE DATA – Complete game state for a single save slot
@@ -41,6 +43,15 @@ class SaveData {
   // Status Effects
   List<StatusEffect> activeStatusEffects;
 
+  // Explored Zones
+  List<String> exploredZones;
+
+  // Shared Warehouse
+  WarehouseData? warehouse;
+
+  // Shared Bank
+  BankData? bank;
+
   // Cloud Sync
   String? cloudRunId;
   String syncStatus; // "local_only", "synced", "pending_sync"
@@ -69,6 +80,9 @@ class SaveData {
     this.lastMerchantRotationHour = -1000,
     this.bossDefeatedDays = const [],
     this.activeStatusEffects = const [],
+    this.exploredZones = const [],
+    this.warehouse,
+    this.bank,
     this.cloudRunId,
     this.syncStatus = 'local_only',
     this.lastSyncedAt,
@@ -97,6 +111,9 @@ class SaveData {
     'lastMerchantRotationHour': lastMerchantRotationHour,
     'bossDefeatedDays': bossDefeatedDays,
     'activeStatusEffects': activeStatusEffects.map((e) => e.toJson()).toList(),
+    'exploredZones': exploredZones,
+    'warehouse': warehouse?.toJson(),
+    'bank': bank?.toJson(),
     'cloudRunId': cloudRunId,
     'syncStatus': syncStatus,
     'lastSyncedAt': lastSyncedAt?.toIso8601String(),
@@ -133,6 +150,13 @@ class SaveData {
             ?.map((e) => StatusEffect.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
+    exploredZones: (json['exploredZones'] as List?)?.cast<String>() ?? [],
+    warehouse: json['warehouse'] != null
+        ? WarehouseData.fromJson(json['warehouse'] as Map<String, dynamic>)
+        : null,
+    bank: json['bank'] != null
+        ? BankData.fromJson(json['bank'] as Map<String, dynamic>)
+        : null,
     cloudRunId: json['cloudRunId'] as String?,
     syncStatus: json['syncStatus'] as String? ?? 'local_only',
     lastSyncedAt: json['lastSyncedAt'] != null

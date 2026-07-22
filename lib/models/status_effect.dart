@@ -176,7 +176,7 @@ extension CureMethodExtension on CureMethod {
   String get label {
     switch (this) {
       case CureMethod.resting:
-        return 'Rest at Inn';
+        return 'Rest or Camp';
       case CureMethod.doctor:
         return 'Visit Doctor';
       case CureMethod.killSpecificEnemy:
@@ -184,7 +184,7 @@ extension CureMethodExtension on CureMethod {
       case CureMethod.gambling:
         return 'Gambling';
       case CureMethod.townOnly:
-        return 'Visit Settlement';
+        return 'Visit Settlement (unused)';
       case CureMethod.specificAction:
         return 'Special Action';
       case CureMethod.battleOnly:
@@ -340,8 +340,8 @@ class StatusEffectFactory {
       type: StatusEffectType.poison,
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
-      cureMethod: CureMethod.doctor,
-      cureDescription: 'Visit a doctor or rest at the inn',
+      cureMethod: CureMethod.resting,
+      cureDescription: 'Rest or camp to recover',
       damagePerTurn: damagePerTurn,
     );
   }
@@ -352,7 +352,7 @@ class StatusEffectFactory {
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
       cureMethod: CureMethod.resting,
-      cureDescription: 'Rest at the inn',
+      cureDescription: 'Rest or camp to recover',
       damagePerTurn: damagePerTurn,
     );
   }
@@ -362,8 +362,8 @@ class StatusEffectFactory {
       type: StatusEffectType.bleeding,
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
-      cureMethod: CureMethod.townOnly,
-      cureDescription: 'Visit any settlement',
+      cureMethod: CureMethod.resting,
+      cureDescription: 'Rest or camp to recover',
       damagePerTurn: damagePerTurn,
     );
   }
@@ -388,7 +388,7 @@ class StatusEffectFactory {
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
       cureMethod: CureMethod.resting,
-      cureDescription: 'Rest at the inn',
+      cureDescription: 'Rest or camp to recover',
       attackModifier: -4,
     );
   }
@@ -407,8 +407,8 @@ class StatusEffectFactory {
       type: StatusEffectType.paralyzed,
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
-      cureMethod: CureMethod.doctor,
-      cureDescription: 'Visit a doctor',
+      cureMethod: CureMethod.resting,
+      cureDescription: 'Rest or camp to recover',
     );
   }
 
@@ -430,8 +430,8 @@ class StatusEffectFactory {
       type: StatusEffectType.vulnerability,
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
-      cureMethod: CureMethod.townOnly,
-      cureDescription: 'Visit any settlement',
+      cureMethod: CureMethod.resting,
+      cureDescription: 'Rest or camp to recover',
       damageTakenModifier: 1.25,
     );
   }
@@ -441,8 +441,8 @@ class StatusEffectFactory {
       type: StatusEffectType.madness,
       durationType: StatusDurationType.hours,
       remainingDuration: hours,
-      cureMethod: CureMethod.doctor,
-      cureDescription: 'Visit a doctor in town',
+      cureMethod: CureMethod.resting,
+      cureDescription: 'Rest or camp to recover',
       attackModifier: -3,
       defenseModifier: 2,
       critChanceModifier: 0.15,

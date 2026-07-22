@@ -5,13 +5,17 @@ import '../models/item.dart';
 import '../models/zone.dart';
 import '../widgets/game_image.dart';
 import '../widgets/game_theme.dart';
+import '../widgets/node_screen_widget.dart';
+import '../widgets/responsive_layout.dart';
 import '../widgets/status_effect_display.dart';
+import 'inventory_screen.dart';
 
 class MainScreen extends StatelessWidget {
   final Character player;
   final int hoursPassed;
   final ZoneType currentZone;
   final List<Item?> equippedSlots;
+  final List<Item> inventory;
   final Function(String) onChangeScreen;
   final Future<bool> Function()? onSave;
   final Future<bool> Function()? onSyncCloud;
@@ -24,6 +28,7 @@ class MainScreen extends StatelessWidget {
     required this.hoursPassed,
     required this.currentZone,
     required this.equippedSlots,
+    required this.inventory,
     required this.onChangeScreen,
     this.onSave,
     this.onSyncCloud,
@@ -71,457 +76,691 @@ class MainScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: GameColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Scrollable content ──
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // ── TIME & ZONE DISPLAY ──
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: GameColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GameColors.border),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "DAY $days  ·  $hours:00",
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Icon(
-                                    zoneData.icon,
-                                    color: zoneData.color,
-                                    size: 12,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    zoneData.name.toUpperCase(),
-                                    style: TextStyle(
-                                      color: zoneData.color,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: GameColors.accent.withValues(
-                                    alpha: 0.15,
-                                  ),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  "ONGOING RUN",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: GameColors.accent,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // ── MENU BUTTON ──
-                              GestureDetector(
-                                onTap: () => _showMainMenu(context),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: GameColors.surfaceLight,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: GameColors.border,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.menu_rounded,
-                                    color: Colors.white70,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+      body: OrientationLayout(
+        portrait: _buildPortraitLayout(
+          context,
+          days,
+          hours,
+          zoneData,
+          totalAtk,
+          totalBlock,
+          totalLifeSteal,
+          totalThorns,
+          totalCrit,
+          totalLuck,
+          totalBonusDamage,
+          totalResistances,
+        ),
+        landscape: _buildLandscapeLayout(
+          context,
+          days,
+          hours,
+          zoneData,
+          totalAtk,
+          totalBlock,
+          totalLifeSteal,
+          totalThorns,
+          totalCrit,
+          totalLuck,
+          totalBonusDamage,
+          totalResistances,
+        ),
+      ),
+    );
+  }
 
-                    // ── PLAYER CARD ──
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: GameColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GameColors.border),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              StatusEffectDisplay(
-                                effects: player.activeStatusEffects,
-                                maxHeight:
-                                    MediaQuery.of(context).size.height * 0.25,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: SizedBox(
-                                  height:
-                                      MediaQuery.of(context).size.height * 0.3,
-                                  child: GameImage(
-                                    imagePath: player.imagePath,
-                                    fallbackIcon: Icons.person,
-                                    size:
-                                        MediaQuery.of(context).size.height *
-                                        0.3,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const SizedBox(width: 36),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            player.name,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            player.className,
-                            style: TextStyle(
-                              color: GameColors.primary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          // HP Bar
-                          HpBar(
-                            current: player.hp,
-                            max: player.effectiveMaxHp,
-                            height: 12,
-                            showLabel: true,
-                            showNumbers: true,
-                          ),
-                          const SizedBox(height: 10),
-
-                          // Credits
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.monetization_on,
-                                color: GameColors.gold,
-                                size: 14,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${player.credits} Credits',
-                                style: TextStyle(
-                                  color: GameColors.gold,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // ── DETAILED STATS ──
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: GameColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: GameColors.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'COMBAT STATS',
-                            style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildStatGrid(context, [
-                            _StatItem(
-                              '⚔️',
-                              'ATK',
-                              '$totalAtk',
-                              GameColors.primary,
-                              'Attack Power',
-                              'The base damage you deal per turn in combat.',
-                              'Base ATK (${player.baseAttack}) + Equipment Bonus + Status Effects = $totalAtk',
-                            ),
-                            _StatItem(
-                              '🛡️',
-                              'DEF',
-                              '$totalBlock',
-                              GameColors.accent,
-                              'Damage Reduction',
-                              'Flat damage subtracted from every enemy attack.',
-                              'Each point of DEF reduces incoming damage by 1.\nCurrent: $totalBlock flat reduction.',
-                            ),
-                            _StatItem(
-                              '💥',
-                              'CRIT',
-                              '${(totalCrit * 100).toInt()}%',
-                              GameColors.gold,
-                              'Critical Hit Chance',
-                              'Chance to deal 2× damage on an attack.',
-                              'Crit = Equipment Crit% + (Luck × 1%)\n= ${(totalCrit * 100).toInt()}% chance to deal double damage.',
-                            ),
-                            _StatItem(
-                              '🍀',
-                              'LUCK',
-                              '$totalLuck',
-                              Colors.lightGreen,
-                              'Luck',
-                              'Increases crit chance (+1% per point), drop rates, and event outcomes.',
-                              'Each Luck point adds +1% crit chance and +2% drop chance.\nTotal Luck: $totalLuck',
-                            ),
-                            if (totalLifeSteal > 0)
-                              _StatItem(
-                                '🩸',
-                                'STEAL',
-                                '$totalLifeSteal',
-                                Colors.redAccent,
-                                'Life Steal',
-                                'Heals you for this amount after every successful attack.',
-                                'After each attack, heal for $totalLifeSteal HP.\nCannot exceed max HP.',
-                              ),
-                            if (totalThorns > 0)
-                              _StatItem(
-                                '🌵',
-                                'THORN',
-                                '$totalThorns',
-                                Colors.green,
-                                'Thorns',
-                                'Deals flat damage back to the enemy every turn, even when hit.',
-                                'Each turn, reflect $totalThorns damage to the attacker.\nApplied after enemy attacks.',
-                              ),
-                          ]),
-                          if (totalBonusDamage.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            const Text(
-                              'BONUS DAMAGE',
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: totalBonusDamage.entries
-                                  .map(
-                                    (e) => GestureDetector(
-                                      onTap: () => _showDamageTypePopup(
-                                        context,
-                                        e.key,
-                                        e.value,
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: e.key.color.withValues(
-                                            alpha: 0.15,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          border: Border.all(
-                                            color: e.key.color.withValues(
-                                              alpha: 0.4,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '${e.key.icon} ${e.key.label}: +${e.value}',
-                                          style: TextStyle(
-                                            color: e.key.color,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                          ],
-                          if (totalResistances.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            const Text(
-                              'RESISTANCES',
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: totalResistances.entries
-                                  .map(
-                                    (e) => GestureDetector(
-                                      onTap: () => _showResistancePopup(
-                                        context,
-                                        e.key,
-                                        e.value,
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: e.key.color.withValues(
-                                            alpha: 0.15,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          border: Border.all(
-                                            color: e.key.color.withValues(
-                                              alpha: 0.4,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '${e.key.icon} ${e.key.label}: +${e.value}',
-                                          style: TextStyle(
-                                            color: e.key.color,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PORTRAIT LAYOUT (original vertical Column)
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildPortraitLayout(
+    BuildContext context,
+    int days,
+    int hours,
+    Zone zoneData,
+    int totalAtk,
+    int totalBlock,
+    int totalLifeSteal,
+    int totalThorns,
+    double totalCrit,
+    int totalLuck,
+    Map<DamageType, int> totalBonusDamage,
+    Map<DamageType, int> totalResistances,
+  ) {
+    return SafeArea(
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTimeBar(context, days, hours, zoneData),
+                  const SizedBox(height: 12),
+                  _buildPlayerCard(context, false),
+                  const SizedBox(height: 12),
+                  _buildStatsPanel(
+                    context,
+                    false,
+                    totalAtk,
+                    totalBlock,
+                    totalLifeSteal,
+                    totalThorns,
+                    totalCrit,
+                    totalLuck,
+                    totalBonusDamage,
+                    totalResistances,
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ),
             ),
-
-            // ── ACTION BUTTONS (fixed at bottom, don't scroll) ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: GameColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 4,
-                        shadowColor: GameColors.primary.withValues(alpha: 0.4),
+          ),
+          // Portrait: action buttons
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: zoneData.color,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onPressed: () => onChangeScreen('travel'),
-                      child: const Text(
-                        "SCOUT ADJACENT NODE",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
+                      elevation: 4,
+                      shadowColor: zoneData.color.withValues(alpha: 0.4),
+                    ),
+                    onPressed: () => onChangeScreen('node_screen'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(zoneData.icon, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          "VIEW NODE — ${zoneData.name.toUpperCase()}",
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
+                ),
+                // Bank & Warehouse buttons for settlements
+                if (zoneData.isSettlement) ...[
                   const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        foregroundColor: GameColors.accent,
-                        side: BorderSide(
-                          color: GameColors.accent.withValues(alpha: 0.4),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            foregroundColor: GameColors.gold,
+                            side: BorderSide(
+                              color: GameColors.gold.withValues(alpha: 0.4),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => onChangeScreen('bank'),
+                          icon: const Icon(Icons.account_balance, size: 16),
+                          label: const Text(
+                            "BANK",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
                         ),
                       ),
-                      onPressed: () => onChangeScreen('inventory'),
-                      child: const Text(
-                        "MATRIX CONFIGURATION",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.8,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            foregroundColor: Colors.cyanAccent,
+                            side: BorderSide(
+                              color: Colors.cyanAccent.withValues(alpha: 0.4),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => onChangeScreen('warehouse'),
+                          icon: const Icon(Icons.warehouse, size: 16),
+                          label: const Text(
+                            "WAREHOUSE",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LANDSCAPE LAYOUT: Left = portrait content, Right = NodeScreenWidget
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildLandscapeLayout(
+    BuildContext context,
+    int days,
+    int hours,
+    Zone zoneData,
+    int totalAtk,
+    int totalBlock,
+    int totalLifeSteal,
+    int totalThorns,
+    double totalCrit,
+    int totalLuck,
+    Map<DamageType, int> totalBonusDamage,
+    Map<DamageType, int> totalResistances,
+  ) {
+    final pad = Responsive.horizontalPadding(context);
+    return SafeArea(
+      child: Row(
+        children: [
+          // ── LEFT PANEL: Full portrait content (time + player + stats) ──
+          SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(pad),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTimeBar(context, days, hours, zoneData),
+                  const SizedBox(height: 10),
+                  _buildPlayerCard(context, true),
+                  const SizedBox(height: 10),
+                  _buildStatsPanel(
+                    context,
+                    true,
+                    totalAtk,
+                    totalBlock,
+                    totalLifeSteal,
+                    totalThorns,
+                    totalCrit,
+                    totalLuck,
+                    totalBonusDamage,
+                    totalResistances,
                   ),
                 ],
               ),
             ),
-          ],
+          ),
+          // ── RIGHT PANEL: Node screen visual ──
+          Expanded(
+            child: NodeScreenWidget(
+              currentZone: currentZone,
+              onScout: () => onChangeScreen('travel'),
+              onInventory: () => _showInventoryOverlay(context),
+              onBank: zoneData.isSettlement
+                  ? () => onChangeScreen('bank')
+                  : null,
+              onWarehouse: zoneData.isSettlement
+                  ? () => onChangeScreen('warehouse')
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows inventory as a floating overlay on the right side in landscape.
+  void _showInventoryOverlay(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final dialogWidth = (screenWidth * 0.9).clamp(400.0, 900.0);
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF121212),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: GameColors.accent.withValues(alpha: 0.4)),
         ),
+        alignment: Alignment.centerRight,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: dialogWidth,
+            maxHeight: screenHeight * 0.85,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Title bar with close button ──
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: GameColors.surface,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: GameColors.accent.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2,
+                        color: GameColors.accent,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'INVENTORY OVERLOAD',
+                          style: TextStyle(
+                            color: GameColors.accent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          onChangeScreen('main');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: GameColors.surfaceLight,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: GameColors.border),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white70,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // ── Inventory content ──
+                Flexible(
+                  child: InventoryScreen(
+                    player: player,
+                    inventory: inventory,
+                    equippedSlots: equippedSlots,
+                    currentZone: currentZone,
+                    onBack: () {
+                      Navigator.pop(ctx);
+                      onChangeScreen('main');
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SHARED BUILDERS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildTimeBar(
+    BuildContext context,
+    int days,
+    int hours,
+    Zone zoneData,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: GameColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: GameColors.border),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "DAY $days  ·  $hours:00",
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(zoneData.icon, color: zoneData.color, size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    zoneData.name.toUpperCase(),
+                    style: TextStyle(
+                      color: zoneData.color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: () => _showMainMenu(context),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: GameColors.surfaceLight,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: GameColors.border),
+              ),
+              child: const Icon(
+                Icons.menu_rounded,
+                color: Colors.white70,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerCard(BuildContext context, bool isLandscape) {
+    final imageHeight = isLandscape
+        ? MediaQuery.of(context).size.height * 0.35
+        : MediaQuery.of(context).size.height * 0.3;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: GameColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: GameColors.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              StatusEffectDisplay(
+                effects: player.activeStatusEffects,
+                maxHeight: MediaQuery.of(context).size.height * 0.25,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: imageHeight,
+                  child: GameImage(
+                    imagePath: player.imagePath,
+                    fallbackIcon: Icons.person,
+                    size: imageHeight,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const SizedBox(width: 36),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            player.name,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            player.className,
+            style: TextStyle(
+              color: GameColors.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          HpBar(
+            current: player.hp,
+            max: player.effectiveMaxHp,
+            height: 12,
+            showLabel: true,
+            showNumbers: true,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.monetization_on, color: GameColors.gold, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                '${player.credits} Credits',
+                style: TextStyle(
+                  color: GameColors.gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsPanel(
+    BuildContext context,
+    bool isLandscape,
+    int totalAtk,
+    int totalBlock,
+    int totalLifeSteal,
+    int totalThorns,
+    double totalCrit,
+    int totalLuck,
+    Map<DamageType, int> totalBonusDamage,
+    Map<DamageType, int> totalResistances,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: GameColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: GameColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'COMBAT STATS',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildStatGrid(context, [
+            _StatItem(
+              '⚔️',
+              'ATK',
+              '$totalAtk',
+              GameColors.primary,
+              'Attack Power',
+              'The base damage you deal per turn in combat.',
+              'Base ATK (${player.baseAttack}) + Equipment Bonus + Status Effects = $totalAtk',
+            ),
+            _StatItem(
+              '🛡️',
+              'DEF',
+              '$totalBlock',
+              GameColors.accent,
+              'Damage Reduction',
+              'Flat damage subtracted from every enemy attack.',
+              'Each point of DEF reduces incoming damage by 1.\nCurrent: $totalBlock flat reduction.',
+            ),
+            _StatItem(
+              '💥',
+              'CRIT',
+              '${(totalCrit * 100).toInt()}%',
+              GameColors.gold,
+              'Critical Hit Chance',
+              'Chance to deal 2× damage on an attack.',
+              'Crit = Equipment Crit% + (Luck × 1%)\n= ${(totalCrit * 100).toInt()}% chance to deal double damage.',
+            ),
+            _StatItem(
+              '🍀',
+              'LUCK',
+              '$totalLuck',
+              Colors.lightGreen,
+              'Luck',
+              'Increases crit chance (+1% per point), drop rates, and event outcomes.',
+              'Each Luck point adds +1% crit chance and +2% drop chance.\nTotal Luck: $totalLuck',
+            ),
+            if (totalLifeSteal > 0)
+              _StatItem(
+                '🩸',
+                'STEAL',
+                '$totalLifeSteal',
+                Colors.redAccent,
+                'Life Steal',
+                'Heals you for this amount after every successful attack.',
+                'After each attack, heal for $totalLifeSteal HP.\nCannot exceed max HP.',
+              ),
+            if (totalThorns > 0)
+              _StatItem(
+                '🌵',
+                'THORN',
+                '$totalThorns',
+                Colors.green,
+                'Thorns',
+                'Deals flat damage back to the enemy every turn, even when hit.',
+                'Each turn, reflect $totalThorns damage to the attacker.\nApplied after enemy attacks.',
+              ),
+          ]),
+          if (totalBonusDamage.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'BONUS DAMAGE',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: totalBonusDamage.entries
+                  .map(
+                    (e) => GestureDetector(
+                      onTap: () =>
+                          _showDamageTypePopup(context, e.key, e.value),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: e.key.color.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: e.key.color.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Text(
+                          '${e.key.icon} ${e.key.label}: +${e.value}',
+                          style: TextStyle(
+                            color: e.key.color,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          if (totalResistances.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'RESISTANCES',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: totalResistances.entries
+                  .map(
+                    (e) => GestureDetector(
+                      onTap: () =>
+                          _showResistancePopup(context, e.key, e.value),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: e.key.color.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: e.key.color.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Text(
+                          '${e.key.icon} ${e.key.label}: +${e.value}',
+                          style: TextStyle(
+                            color: e.key.color,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ],
       ),
     );
   }

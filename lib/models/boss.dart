@@ -3,6 +3,7 @@ import 'dart:math';
 import 'damage_type.dart';
 import 'enemy.dart';
 import 'item.dart';
+import 'zone.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════════════
 /// WEEKLY BOSS DEFINITIONS – 10 unique bosses with unique mechanics
@@ -351,4 +352,232 @@ class BossEncounterTracker {
     _encounterIndex = 0;
     _defeatedBosses.clear();
   }
+}
+
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// GUARDIAN BOSSES – 7 endgame guardians guarding Flutter-Rings
+/// Each guardian is tied to a specific endgame zone and drops its Flutter-Ring.
+/// ═══════════════════════════════════════════════════════════════════════════════
+class GuardianBosses {
+  static final Random _random = Random();
+
+  static Item _pick(Rarity r) {
+    final pool = Item.chestLootPool.where((i) => i.rarity == r).toList();
+    return pool[_random.nextInt(pool.length)];
+  }
+
+  /// All 7 legendary guardians guarding the Flutter-Rings (All Tier 9 Endgame Scale)
+  static final List<Enemy Function(int week)> allGuardians = [
+    // 1. FLICKER GUARDIAN: Chrono-Glitch Tachyon
+    // Guards: Flutter-Ring: Flicker (Hasted / Madness)
+    (week) => Enemy(
+      name: 'CHRONO-GLITCH TACHYON',
+      description:
+          'A hyper-velocity anomaly flickering between parallel processing '
+          'execution threads. It strikes twice in a single frame.',
+      hp: 310,
+      maxHp: 310,
+      attack: 22,
+      goldReward: 180,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.lightning,
+      immunities: [DamageType.lightning],
+      mechanic: BossMechanic.chainStrike,
+      mechanicValue: 2,
+      bossTier: 9,
+    ),
+
+    // 2. SHUDDER GUARDIAN: Richter Engine
+    // Guards: Flutter-Ring: Shudder (Empowered / Vulnerability)
+    (week) => Enemy(
+      name: 'RICHTER ENGINE',
+      description:
+          'A structural testing mainframe gone rogue. It vibrates with destructive '
+          'seismic resonance, doubling its damage output when pushed.',
+      hp: 300,
+      maxHp: 300,
+      attack: 24,
+      goldReward: 180,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.physical,
+      immunities: [DamageType.physical],
+      mechanic: BossMechanic.enrage,
+      mechanicValue: 200,
+      bossTier: 9,
+    ),
+
+    // 3. ARRHYTHMIA GUARDIAN: Sanguine Core
+    // Guards: Flutter-Ring: Arrhythmia (LifeStealAura / Corruption)
+    (week) => Enemy(
+      name: 'SANGUINE CORE',
+      description:
+          'A parasitic computational entity pumping crimson code. It continuously '
+          'siphons and degrades the player\'s maximum structural integrity.',
+      hp: 320,
+      maxHp: 320,
+      attack: 21,
+      goldReward: 180,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.dark,
+      immunities: [DamageType.dark],
+      mechanic: BossMechanic.drainMaxHp,
+      mechanicValue: 5,
+      bossTier: 9,
+    ),
+
+    // 4. WAVER GUARDIAN: Phantasmagoria
+    // Guards: Flutter-Ring: Waver (Blessed / Weakened)
+    (week) => Enemy(
+      name: 'PHANTASMAGORIA',
+      description:
+          'A shimmering, illusory phantom that wavers inside a shifting elemental '
+          'axis, breaking all systemic target locks.',
+      hp: 330,
+      maxHp: 330,
+      attack: 23,
+      goldReward: 180,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.physical,
+      immunities: [],
+      resistance: {
+        DamageType.physical: 0.3,
+        DamageType.fire: 0.3,
+        DamageType.ice: 0.3,
+        DamageType.lightning: 0.3,
+      },
+      mechanic: BossMechanic.shiftingTypes,
+      mechanicValue: 0,
+      bossTier: 9,
+    ),
+
+    // 5. HOVER GUARDIAN: Null-G Colossus
+    // Guards: Flutter-Ring: Hover (ShieldAura / Paralyzed)
+    (week) => Enemy(
+      name: 'NULL-G COLOSSUS',
+      description:
+          'A massive gravity-inverting citadel hovering above the scrap grid. '
+          'It wraps itself in thick, regenerating sub-space shield layers.',
+      hp: 340,
+      maxHp: 340,
+      attack: 22,
+      goldReward: 180,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.void_,
+      immunities: [DamageType.void_],
+      mechanic: BossMechanic.shield,
+      mechanicValue: 45,
+      bossTier: 9,
+    ),
+
+    // 6. CHRYSALIS GUARDIAN: Permafrost Cocoon
+    // Guards: Flutter-Ring: Chrysalis (Regeneration / Frozen)
+    (week) => Enemy(
+      name: 'PERMAFROST COCOON',
+      description:
+          'A frozen crystalline vault housing a dormant horror. It rapidly '
+          're-compiles its damaged code blocks every single turn.',
+      hp: 320,
+      maxHp: 320,
+      attack: 20,
+      goldReward: 180,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.ice,
+      immunities: [DamageType.ice],
+      mechanic: BossMechanic.heal,
+      mechanicValue: 15,
+      bossTier: 9,
+    ),
+
+    // 7. CAPRICE GUARDIAN: The Grand Arbiter
+    // Guards: Flutter-Ring: Caprice (LuckyBonus / Cursed)
+    (week) => Enemy(
+      name: 'THE GRAND ARBITER',
+      description:
+          'The capricious warden of the high forge. It reflects the player\'s '
+          'input streams directly back into their face.',
+      hp: 350,
+      maxHp: 350,
+      attack: 25,
+      goldReward: 220,
+      potentialLoot: [
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+        _pick(Rarity.legendary),
+      ],
+      attackType: DamageType.holy,
+      immunities: [DamageType.holy, DamageType.dark],
+      mechanic: BossMechanic.damageReflection,
+      mechanicValue: 30,
+      bossTier: 9,
+    ),
+  ];
+
+  /// Mapping from ZoneType to guardian index (0-6)
+  static final Map<ZoneType, int> _zoneToGuardianIndex = {
+    ZoneType.tachyonFaultline: 0,
+    ZoneType.resonanceFault: 1,
+    ZoneType.sanguineConduit: 2,
+    ZoneType.phasmMirage: 3,
+    ZoneType.zeroGVault: 4,
+    ZoneType.cryoCompileCrypt: 5,
+    ZoneType.highForgeMatrix: 6,
+  };
+
+  /// Mapping from ZoneType to Flutter-Ring index (0-6)
+  static final Map<ZoneType, int> _zoneToRingIndex = {
+    ZoneType.tachyonFaultline: 0, // Flicker
+    ZoneType.resonanceFault: 1, // Shudder
+    ZoneType.sanguineConduit: 2, // Arrhythmia
+    ZoneType.phasmMirage: 3, // Waver
+    ZoneType.zeroGVault: 4, // Hover
+    ZoneType.cryoCompileCrypt: 5, // Chrysalis
+    ZoneType.highForgeMatrix: 6, // Caprice
+  };
+
+  /// Get the guardian boss for a specific zone, scaled by the given week.
+  static Enemy? getGuardianForZone(ZoneType zone, {int week = 1}) {
+    final index = _zoneToGuardianIndex[zone];
+    if (index == null) return null;
+    final boss = allGuardians[index](week);
+    final scaled = boss.scaleForWeek(week);
+
+    // Ensure the corresponding Flutter-Ring is in the loot pool
+    final ringIndex = _zoneToRingIndex[zone]!;
+    final ring = Item.flutterRings[ringIndex];
+    if (!scaled.potentialLoot.any((i) => i.id == ring.id)) {
+      scaled.potentialLoot.add(ring);
+    }
+    return scaled;
+  }
+
+  /// Check if a zone contains a guardian boss
+  static bool isGuardianZone(ZoneType zone) =>
+      _zoneToGuardianIndex.containsKey(zone);
+
+  /// All guardian zone types
+  static final Set<ZoneType> guardianZones = _zoneToGuardianIndex.keys.toSet();
 }

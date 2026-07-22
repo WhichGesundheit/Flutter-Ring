@@ -4095,6 +4095,1486 @@ class EventPool {
         ),
       ],
     ),
+
+    // ── 46. THE DATA PARASITE ──
+    RandomEvent(
+      id: 'data_parasite',
+      title: 'The Data Parasite',
+      artPlaceholder: '🦠',
+      flavorText:
+          'A microscopic entity latches onto your neural port, feeding on '
+          'your processing power. It whispers sweet nothings as it drains you.',
+      spawnWeight: 0.8,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Purge it with force',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Parasite Destroyed!',
+              resultArt: '🦠',
+              resultDescription:
+                  'You overload your systems to fry the parasite. The surge of '
+                  'energy actually boosts your attack protocols.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 2,
+                  description: '+2 ATK (permanent)',
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'System Damage!',
+              resultArt: '💥',
+              resultDescription:
+                  'The purge damages your own systems in the process.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.poison,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '💡 Negotiate with it',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Symbiosis!',
+              resultArt: '🦠',
+              resultDescription:
+                  'The parasite agrees to share its knowledge in exchange for '
+                  'a small data fee. You gain credits and awareness.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 40),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Betrayed!',
+              resultArt: '🦠',
+              resultDescription:
+                  'The parasite multiplies instead of negotiating.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.poison,
+                ),
+                EventEffect(type: EventEffectType.goldChange, value: -25),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🏃 Run it off',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Shaken Off',
+              resultArt: '🏃',
+              resultDescription:
+                  'You sprint until the parasite falls off. Exhausting but safe.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 47. THE CLOCKWORK ORACLE ──
+    RandomEvent(
+      id: 'clockwork_oracle',
+      title: 'The Clockwork Oracle',
+      artPlaceholder: '🔮',
+      flavorText:
+          'A massive mechanical head protrudes from the ground, gears turning '
+          'inside its hollow skull. It speaks in riddles that hint at the future.',
+      spawnWeight: 0.5,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '🔮 Ask about treasure',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Coordinates Revealed!',
+              resultArt: '🔮',
+              resultDescription:
+                  'The oracle reveals the location of a hidden cache nearby.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 60),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'False Promise!',
+              resultArt: '😵',
+              resultDescription:
+                  'The coordinates lead to a trap. The oracle laughs.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Ask about enemies',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Combat Insight!',
+              resultArt: '⚔️',
+              resultDescription:
+                  'The oracle reveals weaknesses in nearby threats. You feel empowered.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.empowered,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Confusion!',
+              resultArt: '😵',
+              resultDescription:
+                  'The riddles scramble your tactical subroutines.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.weakened,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Ask about defense',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Shield Upgrade!',
+              resultArt: '🛡️',
+              resultDescription:
+                  'The oracle downloads defensive schematics into your system.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 15),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Overload!',
+              resultArt: '💥',
+              resultDescription: 'Too much data floods your defensive systems.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 48. THE RUST WORMS ──
+    RandomEvent(
+      id: 'rust_worms',
+      title: 'The Rust Worms',
+      artPlaceholder: '🐛',
+      flavorText:
+          'A swarm of metallic worms burrows through the corroded ground. '
+          'They consume metal and data alike, leaving only dust behind.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Burn them with plasma',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Worms Incinerated!',
+              resultArt: '🔥',
+              resultDescription:
+                  'The plasma cleanses the area. The worm husks contain trace minerals.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Swarmed!',
+              resultArt: '🐛',
+              resultDescription:
+                  'The worms cling to your armor, corroding it before you shake them off.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Lure them into a trap',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Worm Catcher!',
+              resultArt: '🐛',
+              resultDescription:
+                  'The swarm falls for your bait. Their cores are valuable.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 45),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Bait Stolen!',
+              resultArt: '🐛',
+              resultDescription: 'The worms eat your bait and your supplies.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: -20),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🏃 Sprint past them',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Dodged!',
+              resultArt: '🏃',
+              resultDescription:
+                  'You leap over the swarm, taking minimal damage.',
+              effects: [EventEffect(type: EventEffectType.hpChange, value: -5)],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 49. THE PHANTOM CONVOY ──
+    RandomEvent(
+      id: 'phantom_convoy',
+      title: 'The Phantom Convoy',
+      artPlaceholder: '🚛',
+      flavorText:
+          'A convoy of spectral trucks roars past you, their engines screaming '
+          'with digital echoes. One truck slows, its door opening to reveal '
+          'crates of supplies inside.',
+      spawnWeight: 0.7,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '⚔️ Board the lead truck',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Supplies Secured!',
+              resultArt: '🚛',
+              resultDescription:
+                  'You leap aboard and grab what you can before the convoy fades.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 35),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Run Over!',
+              resultArt: '💥',
+              resultDescription:
+                  'The phantom driver floors it. You take a direct hit.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -20),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Flag down the last truck',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Ride Along!',
+              resultArt: '🚛',
+              resultDescription:
+                  'The phantom driver lets you ride. You arrive at a hidden depot.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 50),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Ghosted!',
+              resultArt: '👻',
+              resultDescription:
+                  'The truck phases through you, leaving you dizzy.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.paralyzed,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '👁️ Watch and record',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Data Recorded',
+              resultArt: '👁️',
+              resultDescription:
+                  'You record the convoy\'s path. This intel could be valuable later.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 50. THE NEON BUTTERFLIES ──
+    RandomEvent(
+      id: 'neon_butterflies',
+      title: 'The Neon Butterflies',
+      artPlaceholder: '🦋',
+      flavorText:
+          'A cloud of bioluminescent butterflies swirls around you. Each '
+          'wingbeat sends pulses of healing nanites through the air. But '
+          'some species carry data-venom on their proboscis.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🦋 Let them land on you',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Healed!',
+              resultArt: '🦋',
+              resultDescription:
+                  'The butterflies heal your wounds with their nanite dust.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 25),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.blessed,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Venom Stung!',
+              resultArt: '🦋',
+              resultDescription:
+                  'A venomous butterfly stings you. Your systems rebel.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.poison,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Shield yourself',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Nanite Harvest!',
+              resultArt: '🛡️',
+              resultDescription:
+                  'You filter the nanites from the air, boosting your defenses.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 15),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Swarmed!',
+              resultArt: '💥',
+              resultDescription: 'The butterflies overwhelm your shields.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '📸 Capture some for analysis',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Samples Collected!',
+              resultArt: '📸',
+              resultDescription:
+                  'You catch a few butterflies. Their wings are worth good credits.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 25),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 51. THE DIGITAL SANDSTORM ──
+    RandomEvent(
+      id: 'digital_sandstorm',
+      title: 'The Digital Sandstorm',
+      artPlaceholder: '🌪️',
+      flavorText:
+          'A swirling vortex of corrupted data particles engulfs the area. '
+          'Visibility drops to zero as pixelated sand erodes everything.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🛡️ Hunker down and shield',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Weathered!',
+              resultArt: '🛡️',
+              resultDescription:
+                  'Your shielding holds. The storm deposits useful scrap around you.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Eroded!',
+              resultArt: '💥',
+              resultDescription: 'The sand strips away your outer plating.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Fight through it',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Storm Surfer!',
+              resultArt: '⚔️',
+              resultDescription:
+                  'You charge through the storm, emerging on the other side '
+                  'with a trail of debris in your wake.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.empowered,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Disoriented!',
+              resultArt: '😵',
+              resultDescription:
+                  'The storm throws you around, damaging your navigation.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.weakened,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Wait for it to pass',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Storm Passed',
+              resultArt: '☀️',
+              resultDescription:
+                  'The storm clears quickly. You spot something shiny in the aftermath.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 20),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Prolonged Exposure!',
+              resultArt: '🌪️',
+              resultDescription: 'The storm lingers longer than expected.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.vulnerability,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 52. THE LOBOTOMIZED DRONE ──
+    RandomEvent(
+      id: 'lobotomized_drone',
+      title: 'The Lobotomized Drone',
+      artPlaceholder: '🤖',
+      flavorText:
+          'A combat drone with its memory banks wiped circles overhead. It '
+          'seems lost, scanning everything without attacking. Its weapon '
+          'systems are still active.',
+      spawnWeight: 0.8,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '💻 Reprogram it',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Drone Ally!',
+              resultArt: '🤖',
+              resultDescription:
+                  'You access its command interface and reprogram it. The drone '
+                  'becomes your temporary guardian.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 15),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Firewall Rejects!',
+              resultArt: '🚫',
+              resultDescription:
+                  'The drone\'s firewall blocks your hack and retaliates.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Lure it to a trap',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Drone Salvaged!',
+              resultArt: '🤖',
+              resultDescription:
+                  'The drone crashes into your trap. Its weapons and parts are valuable.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 50),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Trap Triggered!',
+              resultArt: '💥',
+              resultDescription:
+                  'The drone detects the trap and fires at it — and at you.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -14),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '👁️ Observe its patterns',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Data Catalogued',
+              resultArt: '👁️',
+              resultDescription:
+                  'You record the drone\'s patrol patterns. Useful intel for later.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.luckyBonus,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 53. THE CORROSION PRIEST ──
+    RandomEvent(
+      id: 'corrosion_priest',
+      title: 'The Corrosion Priest',
+      artPlaceholder: '⛪',
+      flavorText:
+          'A robed figure stands before a rusted altar, chanting to the god '
+          'of entropy. Their body is half-consumed by corrosion, yet they '
+          'seem at peace. They offer you a blessing — for a price.',
+      spawnWeight: 0.5,
+      minDay: 2,
+      choices: [
+        EventChoice(
+          text: '🛡️ Accept the blessing',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Entropy Shielded!',
+              resultArt: '⛪',
+              resultDescription:
+                  'The priest grants you immunity to decay. Your systems feel renewed.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.blessed,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 20),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Cursed!',
+              resultArt: '⛪',
+              resultDescription:
+                  'The blessing was a curse in disguise. Corruption seeps in.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.cursed,
+                ),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.poison,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Challenge the priest',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 8),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Priest Defeated!',
+              resultArt: '⚔️',
+              resultDescription:
+                  'You overwhelm the priest. Their altar holds hidden treasures.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 65),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Corroded!',
+              resultArt: '💥',
+              resultDescription:
+                  'The priest\'s entropy power corrodes your armor.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -20),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🚶 Leave an offering and move on',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Offering Accepted',
+              resultArt: '⛪',
+              resultDescription:
+                  'The priest nods silently. You feel slightly lighter in the wallet '
+                  'but lighter in spirit too.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: -15),
+                EventEffect(type: EventEffectType.hpChange, value: 10),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 54. THE MEMORY THIEF ──
+    RandomEvent(
+      id: 'memory_thief',
+      title: 'The Memory Thief',
+      artPlaceholder: '🧩',
+      flavorText:
+          'A shadowy figure darts between the ruins, stealing data fragments '
+          'from anyone nearby. You feel your own memories flickering as it '
+          'draws closer.',
+      spawnWeight: 0.7,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '⚔️ Intercept and fight',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Thief Caught!',
+              resultArt: '🧩',
+              resultDescription:
+                  'You tackle the thief and recover stolen data — including extras.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Memories Stolen!',
+              resultArt: '🧩',
+              resultDescription:
+                  'The thief is too fast. It steals a chunk of your combat data.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.weakened,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Guard your data',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Data Fortified!',
+              resultArt: '🛡️',
+              resultDescription:
+                  'Your firewalls hold. The thief gives up and drops some of its haul.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 25),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Data Breached!',
+              resultArt: '🧩',
+              resultDescription:
+                  'The thief cracks your defenses and takes what it wants.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: -30),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Chase it with luck',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Lucky Catch!',
+              resultArt: '🍀',
+              resultDescription:
+                  'The thief trips and spills its entire collection at your feet.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 40),
+                EventEffect(type: EventEffectType.itemGain),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Escaped!',
+              resultArt: '🧩',
+              resultDescription:
+                  'The thief vanishes into the shadows, laughing.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 55. THE FROZEN SHARD ──
+    RandomEvent(
+      id: 'frozen_shard',
+      title: 'The Frozen Shard',
+      artPlaceholder: '🧊',
+      flavorText:
+          'A crystalline shard floats in the air, radiating intense cold. '
+          'The ground beneath it is covered in digital frost. Inside the '
+          'shard, a light pulses like a heartbeat.',
+      spawnWeight: 0.8,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '⚔️ Shatter the shard',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Shard Smashed!',
+              resultArt: '🧊',
+              resultDescription:
+                  'The shard explodes into a shower of frozen data crystals. '
+                  'Each one is worth a fortune.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 55),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.resistanceBoost,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Frozen Solid!',
+              resultArt: '🧊',
+              resultDescription:
+                  'The shard unleashes a blast of cold, freezing you solid.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.frozen,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '💡 Absorb its energy',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Energy Absorbed!',
+              resultArt: '💡',
+              resultDescription:
+                  'You channel the shard\'s energy into your systems. Maximum capacity increases.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 30),
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 2,
+                  description: '+2 ATK (permanent)',
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'System Freeze!',
+              resultArt: '🧊',
+              resultDescription:
+                  'The energy overload freezes your core systems.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.vulnerability,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '📸 Collect a sample',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Sample Acquired',
+              resultArt: '📸',
+              resultDescription:
+                  'You carefully chip off a piece. It\'s worth selling.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 20),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 56. THE ROGUE SIGNAL ──
+    RandomEvent(
+      id: 'rogue_signal',
+      title: 'The Rogue Signal',
+      artPlaceholder: '📡',
+      flavorText:
+          'An unencrypted broadcast pierces your comms. A distorted voice '
+          'recites a string of coordinates, followed by laughter. The signal '
+          'originates from a collapsed antenna tower nearby.',
+      spawnWeight: 0.7,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '📡 Trace the signal',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Source Found!',
+              resultArt: '📡',
+              resultDescription:
+                  'You trace the signal to a hidden relay with valuable data caches.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 40),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Signal Trap!',
+              resultArt: '💥',
+              resultDescription:
+                  'The signal was a lure. An EMP blast hits you.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.paralyzed,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Destroy the antenna',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Antenna Destroyed!',
+              resultArt: '⚔️',
+              resultDescription:
+                  'You smash the antenna. The signal dies, and you salvage some parts.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Antenna Fights Back!',
+              resultArt: '💥',
+              resultDescription:
+                  'Automated defenses activate when you approach.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🚫 Ignore the signal',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Signal Dismissed',
+              resultArt: '🚫',
+              resultDescription:
+                  'You mute the frequency. Some calls are better left unanswered.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 57. THE MERCHANT CARAVAN ──
+    RandomEvent(
+      id: 'merchant_caravan',
+      title: 'The Merchant Caravan',
+      artPlaceholder: '🐫',
+      flavorText:
+          'A heavily guarded merchant caravan winds through the data-wastes. '
+          'The lead merchant waves and offers you a deal: fight off raiders '
+          'in exchange for first pick of their wares.',
+      spawnWeight: 0.6,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '⚔️ Accept the deal',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Raiders Defeated!',
+              resultArt: '🐫',
+              resultDescription:
+                  'You fend off the raiders. The merchant rewards you generously.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 45),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Overwhelmed!',
+              resultArt: '💀',
+              resultDescription:
+                  'The raiders are too many. You fight them off but take heavy damage.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -22),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Guard the caravan instead',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Caravan Protected!',
+              resultArt: '🛡️',
+              resultDescription:
+                  'Your defensive tactics keep the raiders at bay. The merchant shares supplies.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 20),
+                EventEffect(type: EventEffectType.goldChange, value: 30),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Flank Attack!',
+              resultArt: '💥',
+              resultDescription:
+                  'Raiders hit your flank. The caravan escapes but you\'re left wounded.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Ask for a free sample',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 8),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Charmed!',
+              resultArt: '🍀',
+              resultDescription:
+                  'The merchant takes a liking to you and gives you a free item.',
+              effects: [EventEffect(type: EventEffectType.itemGain)],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Turned Away!',
+              resultArt: '😤',
+              resultDescription: 'The merchant scoffs at your request.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 58. THE ELECTROMAGNETIC PULSE ──
+    RandomEvent(
+      id: 'emp_surge',
+      title: 'The Electromagnetic Pulse',
+      artPlaceholder: '⚡',
+      flavorText:
+          'A massive electromagnetic pulse erupts from a collapsed generator. '
+          'Sparks fly and systems flicker. Your HUD goes haywire as the pulse '
+          'washes over you.',
+      spawnWeight: 1.0,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '🛡️ Absorb the energy',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Energy Harvested!',
+              resultArt: '⚡',
+              resultDescription:
+                  'Your systems absorb the EMP, converting it into raw power.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.empowered,
+                ),
+                EventEffect(type: EventEffectType.goldChange, value: 25),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'System Overload!',
+              resultArt: '💥',
+              resultDescription: 'The energy overwhelms your circuits.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -15),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.paralyzed,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '⚔️ Smash the generator',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Generator Smashed!',
+              resultArt: '⚔️',
+              resultDescription:
+                  'You destroy the generator, stopping the pulse. Valuable parts scatter.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 35),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Secondary Burst!',
+              resultArt: '⚡',
+              resultDescription:
+                  'Destroying the generator triggers a secondary pulse.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🏃 Retreat to safety',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Safe Distance',
+              resultArt: '🏃',
+              resultDescription:
+                  'You back away to a safe distance, avoiding the worst of the pulse.',
+              effects: [],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 59. THE DATA SPRING ──
+    RandomEvent(
+      id: 'data_spring',
+      title: 'The Data Spring',
+      artPlaceholder: '⛲',
+      flavorText:
+          'A fountain of liquid data erupts from the ground, forming a '
+          'mesmerizing geyser of glowing particles. The water hums with '
+          'raw information, and drinking it could rewrite your code.',
+      spawnWeight: 0.7,
+      minDay: 1,
+      choices: [
+        EventChoice(
+          text: '💡 Drink from the spring',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 7),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Code Rewritten!',
+              resultArt: '⛲',
+              resultDescription:
+                  'The data water integrates perfectly, enhancing your core systems.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statBoost,
+                  value: 3,
+                  description: '+3 ATK (permanent)',
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: 15),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Corrupted!',
+              resultArt: '☠️',
+              resultDescription:
+                  'The data is corrupted. It infects your systems.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.corruption,
+                ),
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🛡️ Use it for external repairs',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Repairs Complete!',
+              resultArt: '🛡️',
+              resultDescription:
+                  'You channel the data water to repair your external plating.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: 20),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.shieldAura,
+                ),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Chemical Burn!',
+              resultArt: '💥',
+              resultDescription:
+                  'The data water reacts badly with your plating.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -10),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '📸 Bottle some for later',
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Bottled!',
+              resultArt: '📸',
+              resultDescription:
+                  'You collect samples of the data spring. Could be useful or sellable.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 25),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // ── 60. THE GLITCHED TREASURE CHEST ──
+    RandomEvent(
+      id: 'glitched_chest',
+      title: 'The Glitched Treasure Chest',
+      artPlaceholder: '📦',
+      flavorText:
+          'A treasure chest flickers in and out of existence, its textures '
+          'corrupted and glitching. It might contain legendary loot — or '
+          'it might be a data trap designed to lure greedy runners.',
+      spawnWeight: 0.8,
+      minDay: 0,
+      choices: [
+        EventChoice(
+          text: '💪 Force it open',
+          statCheck: StatCheck(statType: StatType.attack, threshold: 5),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Loot Secured!',
+              resultArt: '📦',
+              resultDescription:
+                  'You smash the chest open. The glitches resolve to reveal treasure.',
+              effects: [
+                EventEffect(type: EventEffectType.itemGain),
+                EventEffect(type: EventEffectType.goldChange, value: 40),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Chest Explodes!',
+              resultArt: '💥',
+              resultDescription:
+                  'The chest was rigged. It explodes in your face.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -18),
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.bleeding,
+                ),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '💡 Hack the lock',
+          statCheck: StatCheck(statType: StatType.defense, threshold: 6),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Hacked!',
+              resultArt: '💡',
+              resultDescription:
+                  'You bypass the glitch-lock and access the chest\'s contents safely.',
+              effects: [
+                EventEffect(type: EventEffectType.goldChange, value: 55),
+              ],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Virus Downloaded!',
+              resultArt: '🟣',
+              resultDescription:
+                  'The chest downloads a virus into your system.',
+              effects: [
+                EventEffect(
+                  type: EventEffectType.statusApply,
+                  statusEffect: StatusEffectType.corruption,
+                ),
+                EventEffect(type: EventEffectType.goldChange, value: -15),
+              ],
+            ),
+          ],
+        ),
+        EventChoice(
+          text: '🍀 Inspect carefully first',
+          statCheck: StatCheck(statType: StatType.luck, threshold: 4),
+          possibleOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'Safe Opening!',
+              resultArt: '📦',
+              resultDescription:
+                  'Your caution pays off. You spot the trap and disarm it before opening.',
+              effects: [EventEffect(type: EventEffectType.itemGain)],
+            ),
+          ],
+          failureOutcomes: [
+            EventOutcome(
+              weight: 1.0,
+              resultTitle: 'False Security!',
+              resultArt: '😵',
+              resultDescription:
+                  'Your inspection gives you false confidence. The trap still triggers.',
+              effects: [
+                EventEffect(type: EventEffectType.hpChange, value: -12),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
   ];
 
   /// Get a random event appropriate for the current day and zone.
